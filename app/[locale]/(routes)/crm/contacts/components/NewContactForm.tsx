@@ -78,6 +78,10 @@ export function NewContactForm({
     social_skype: z.string().optional(),
     social_youtube: z.string().optional(),
     social_tiktok: z.string().optional(),
+    // Student Networking CRM - Workflow Fields
+    company: z.string().optional(),
+    campaign: z.string().optional(),
+    connection_level: z.string().optional(),
   });
 
   type NewAccountFormValues = z.infer<typeof formSchema>;
@@ -90,6 +94,15 @@ export function NewContactForm({
     { name: "Customer", id: "Customer" },
     { name: "Partner", id: "Partner" },
     { name: "Vendor", id: "Vendor" },
+  ];
+
+  // Student Networking CRM - Connection Level options
+  const connectionLevels = [
+    { name: "None", id: "NONE" },
+    { name: "Message Sent", id: "MESSAGE_SENT" },
+    { name: "Connected", id: "CONNECTED" },
+    { name: "In Touch", id: "IN_TOUCH" },
+    { name: "Friends", id: "FRIENDS" },
   ];
 
   const yearArray = Array.from(
@@ -137,6 +150,10 @@ export function NewContactForm({
         birthday_year: "",
         birthday_month: "",
         birthday_day: "",
+        // Student Networking CRM fields
+        company: "",
+        campaign: "",
+        connection_level: "",
       });
       router.refresh();
       onFinish();
@@ -431,6 +448,23 @@ export function NewContactForm({
                 />
                 <FormField
                   control={form.control}
+                  name="company"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company</FormLabel>
+                      <FormControl>
+                        <Input
+                          disabled={isLoading}
+                          placeholder="Acme Inc."
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="position"
                   render={({ field }) => (
                     <FormItem>
@@ -438,7 +472,7 @@ export function NewContactForm({
                       <FormControl>
                         <Input
                           disabled={isLoading}
-                          placeholder="CTO"
+                          placeholder="Software Engineer"
                           {...field}
                         />
                       </FormControl>
@@ -470,7 +504,7 @@ export function NewContactForm({
                   name="type"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Assigned user</FormLabel>
+                      <FormLabel>Contact Type</FormLabel>
                       <Select
                         onValueChange={field.onChange}
                         defaultValue={field.value}
@@ -484,6 +518,50 @@ export function NewContactForm({
                           {contactType.map((type) => (
                             <SelectItem key={type.id} value={type.id}>
                               {type.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="campaign"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Campaign</FormLabel>
+                      <FormControl>
+                        <Input
+                          disabled={isLoading}
+                          placeholder="Tech Outreach Q1"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="connection_level"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Connection Level</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select connection level" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {connectionLevels.map((level) => (
+                            <SelectItem key={level.id} value={level.id}>
+                              {level.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
