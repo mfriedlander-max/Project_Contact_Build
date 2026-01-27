@@ -199,6 +199,19 @@ model crm_Contacts {
   type                   String?             @default("Customer")
   tags                   String[]
   notes                  String[]
+
+  // Student Networking CRM - Workflow Fields
+  company                String?             // Company/organization name
+  email_confidence       EmailConfidence?    // Hunter API confidence level
+  personalized_insert    String?             // AI-generated personalized text
+  insert_confidence      InsertConfidence?   // AI confidence in personalization
+  email_status           EmailStatus?        @default(BLANK)
+  draft_created_at       DateTime?           @db.Date
+  sent_at                DateTime?           @db.Date
+  connection_level       ConnectionLevel?    @default(NONE)
+  campaign               String?             // Campaign/batch grouping
+  custom_fields          Json?               // User-defined columns
+
   assigned_to_user       Users?              @relation(name: "assigned_contacts", fields: [assigned_to], references: [id])
   crate_by_user          Users?              @relation(name: "created_contacts", fields: [created_by], references: [id])
   opportunitiesIDs       String[]            @db.ObjectId
@@ -207,6 +220,33 @@ model crm_Contacts {
   assigned_accounts      crm_Accounts?       @relation(fields: [accountsIDs], references: [id])
   documentsIDs           String[]            @db.ObjectId
   assigned_documents     Documents[]         @relation(fields: [documentsIDs], references: [id])
+}
+
+// Student Networking CRM - Enums
+enum EmailConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum InsertConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum EmailStatus {
+  BLANK
+  DRAFTED
+  SENT
+}
+
+enum ConnectionLevel {
+  NONE
+  MESSAGE_SENT
+  CONNECTED
+  IN_TOUCH
+  FRIENDS
 }
 
 enum crm_Contact_Type {
