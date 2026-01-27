@@ -145,7 +145,7 @@ export function UpdateContactForm({ initialData, setOpen }: NewTaskFormProps) {
   );
 
   const filteredData = users.filter((item: any) =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+    item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false
   );
 
   if (!users || !accounts || !initialData)

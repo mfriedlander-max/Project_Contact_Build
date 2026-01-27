@@ -3,6 +3,23 @@ import { prismadb } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import sendEmail from "@/lib/sendmail";
+import { z } from "zod";
+
+// Validation schema for connection level enum
+const connectionLevelEnum = z.enum([
+  "NONE",
+  "MESSAGE_SENT",
+  "CONNECTED",
+  "IN_TOUCH",
+  "FRIENDS",
+]);
+
+// Validation helper
+function validateConnectionLevel(value: string | undefined | null): string | undefined {
+  if (!value) return undefined;
+  const result = connectionLevelEnum.safeParse(value);
+  return result.success ? result.data : undefined;
+}
 
 //Create route
 export async function POST(req: Request) {
@@ -41,7 +58,14 @@ export async function POST(req: Request) {
       social_youtube,
       social_tiktok,
       type,
+      // Student Networking CRM - Workflow Fields
+      company,
+      campaign,
+      connection_level,
     } = body;
+
+    // Validate connection_level enum
+    const validatedConnectionLevel = validateConnectionLevel(connection_level);
 
     const newContact = await prismadb.crm_Contacts.create({
       data: {
@@ -80,6 +104,10 @@ export async function POST(req: Request) {
         social_youtube,
         social_tiktok,
         type,
+        // Student Networking CRM - Workflow Fields
+        company,
+        campaign,
+        connection_level: validatedConnectionLevel,
       },
     });
 
@@ -153,9 +181,14 @@ export async function PUT(req: Request) {
       social_youtube,
       social_tiktok,
       type,
+      // Student Networking CRM - Workflow Fields
+      company,
+      campaign,
+      connection_level,
     } = body;
 
-    console.log(assigned_account, "assigned_account");
+    // Validate connection_level enum
+    const validatedConnectionLevel = validateConnectionLevel(connection_level);
 
     const newContact = await prismadb.crm_Contacts.update({
       where: {
@@ -197,6 +230,10 @@ export async function PUT(req: Request) {
         social_youtube,
         social_tiktok,
         type,
+        // Student Networking CRM - Workflow Fields
+        company,
+        campaign,
+        connection_level: validatedConnectionLevel,
       },
     });
 
