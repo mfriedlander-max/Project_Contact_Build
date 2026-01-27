@@ -19,10 +19,8 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-const mockChatCompletionsCreate = vi.fn()
-
-vi.mock('@/lib/openai', () => ({
-  openAiHelper: vi.fn(),
+vi.mock('@/lib/anthropic', () => ({
+  anthropicHelper: vi.fn(),
 }))
 
 // Mock rate limiting to always allow requests in tests
@@ -41,7 +39,7 @@ vi.mock('@/lib/rate-limit', () => ({
 // Import mocked modules and route handler
 import { getServerSession } from 'next-auth'
 import { prismadb } from '@/lib/prisma'
-import { openAiHelper } from '@/lib/openai'
+import { anthropicHelper } from '@/lib/anthropic'
 import { POST } from '../generate/route'
 
 // Helper to create mock request
@@ -53,21 +51,18 @@ function createMockRequest(body: Record<string, unknown>): NextRequest {
   })
 }
 
-// Helper to create mock OpenAI client
-function createMockOpenAIClient(responseContent: string) {
+// Helper to create mock Anthropic client
+function createMockAnthropicClient(responseContent: string) {
   return {
-    chat: {
-      completions: {
-        create: vi.fn().mockResolvedValue({
-          choices: [
-            {
-              message: {
-                content: responseContent,
-              },
-            },
-          ],
-        }),
-      },
+    messages: {
+      create: vi.fn().mockResolvedValue({
+        content: [
+          {
+            type: 'text',
+            text: responseContent,
+          },
+        ],
+      }),
     },
   }
 }
@@ -164,8 +159,8 @@ describe('POST /api/personalization/generate', () => {
     })
 
     it('should accept valid linkedinUrl', async () => {
-      const mockOpenAI = createMockOpenAIClient('I noticed your innovative work at Acme Inc...')
-      vi.mocked(openAiHelper).mockResolvedValue(mockOpenAI as never)
+      const mockAnthropic = createMockAnthropicClient('I noticed your innovative work at Acme Inc...')
+      vi.mocked(anthropicHelper).mockResolvedValue(mockAnthropic as never)
 
       vi.mocked(prismadb.crm_Contacts.findFirst).mockResolvedValue({
         id: '123',
@@ -214,8 +209,8 @@ describe('POST /api/personalization/generate', () => {
     })
 
     it('should return HIGH confidence when linkedinUrl is provided', async () => {
-      const mockOpenAI = createMockOpenAIClient('I noticed your innovative work at Acme Inc...')
-      vi.mocked(openAiHelper).mockResolvedValue(mockOpenAI as never)
+      const mockAnthropic = createMockAnthropicClient('I noticed your innovative work at Acme Inc...')
+      vi.mocked(anthropicHelper).mockResolvedValue(mockAnthropic as never)
 
       const request = createMockRequest({
         contactId: '123',
@@ -235,10 +230,10 @@ describe('POST /api/personalization/generate', () => {
     })
 
     it('should return MEDIUM confidence when company and position are provided without linkedinUrl', async () => {
-      const mockOpenAI = createMockOpenAIClient(
+      const mockAnthropic = createMockAnthropicClient(
         'Your work at Acme Inc as an Engineer caught my attention...'
       )
-      vi.mocked(openAiHelper).mockResolvedValue(mockOpenAI as never)
+      vi.mocked(anthropicHelper).mockResolvedValue(mockAnthropic as never)
 
       vi.mocked(prismadb.crm_Contacts.update).mockResolvedValue({
         id: '123',
@@ -263,8 +258,8 @@ describe('POST /api/personalization/generate', () => {
     })
 
     it('should update contact with personalized insert and confidence', async () => {
-      const mockOpenAI = createMockOpenAIClient('I noticed your innovative work at Acme Inc...')
-      vi.mocked(openAiHelper).mockResolvedValue(mockOpenAI as never)
+      const mockAnthropic = createMockAnthropicClient('I noticed your innovative work at Acme Inc...')
+      vi.mocked(anthropicHelper).mockResolvedValue(mockAnthropic as never)
 
       const request = createMockRequest({
         contactId: '123',
@@ -312,21 +307,19 @@ describe('POST /api/personalization/generate', () => {
       expect(data.error).toContain('Contact not found')
     })
 
-    it('should return 500 when OpenAI API fails', async () => {
+    it('should return 500 when Anthropic API fails', async () => {
       vi.mocked(prismadb.crm_Contacts.findFirst).mockResolvedValue({
         id: '123',
         first_name: 'John',
         last_name: 'Doe',
       } as never)
 
-      const mockOpenAI = {
-        chat: {
-          completions: {
-            create: vi.fn().mockRejectedValue(new Error('OpenAI API error')),
-          },
+      const mockAnthropic = {
+        messages: {
+          create: vi.fn().mockRejectedValue(new Error('Anthropic API error')),
         },
       }
-      vi.mocked(openAiHelper).mockResolvedValue(mockOpenAI as never)
+      vi.mocked(anthropicHelper).mockResolvedValue(mockAnthropic as never)
 
       const request = createMockRequest({
         contactId: '123',
@@ -343,7 +336,7 @@ describe('POST /api/personalization/generate', () => {
       expect(data.error).toBeDefined()
     })
 
-    it('should return 500 when OPENAI_API_KEY is not configured', async () => {
+    it('should return 500 when ANTHROPIC_API_KEY is not configured', async () => {
       vi.mocked(prismadb.crm_Contacts.findFirst).mockResolvedValue({
         id: '123',
         first_name: 'John',
@@ -351,7 +344,7 @@ describe('POST /api/personalization/generate', () => {
       } as never)
 
       // Return null to simulate no API key configured
-      vi.mocked(openAiHelper).mockResolvedValue(null)
+      vi.mocked(anthropicHelper).mockResolvedValue(null)
 
       const request = createMockRequest({
         contactId: '123',
@@ -381,8 +374,8 @@ describe('POST /api/personalization/generate', () => {
         last_name: 'Doe',
       } as never)
 
-      const mockOpenAI = createMockOpenAIClient('Generated personalized text...')
-      vi.mocked(openAiHelper).mockResolvedValue(mockOpenAI as never)
+      const mockAnthropic = createMockAnthropicClient('Generated personalized text...')
+      vi.mocked(anthropicHelper).mockResolvedValue(mockAnthropic as never)
 
       vi.mocked(prismadb.crm_Contacts.update).mockResolvedValue({
         id: '123',

@@ -3,7 +3,7 @@ import { prismadb } from '@/lib/prisma'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { z } from 'zod'
-import { openAiHelper } from '@/lib/openai'
+import { anthropicHelper } from '@/lib/anthropic'
 import type { InsertConfidenceType } from '@/lib/types/contact'
 import { rateLimiters, getClientIdentifier } from '@/lib/rate-limit'
 
@@ -126,13 +126,13 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Get OpenAI client
+    // Get Anthropic client
     const userId = session.user.id
-    const openai = await openAiHelper(userId)
+    const anthropic = await anthropicHelper(userId)
 
-    if (!openai) {
+    if (!anthropic) {
       return NextResponse.json(
-        { error: 'OpenAI API key not configured. Please add your API key in settings.' },
+        { error: 'Anthropic API key not configured. Please add your API key in settings.' },
         { status: 500 }
       )
     }
@@ -140,28 +140,24 @@ export async function POST(req: NextRequest) {
     // Calculate confidence based on available data
     const confidence = calculateConfidence(input)
 
-    // Generate personalized insert using OpenAI
+    // Generate personalized insert using Anthropic Claude
     const prompt = buildPrompt(input)
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 150,
+      system: 'You are an expert at writing personalized, authentic email openings for professional networking. Your responses should feel genuine and human, never robotic or sales-like.',
       messages: [
-        {
-          role: 'system',
-          content:
-            'You are an expert at writing personalized, authentic email openings for professional networking. Your responses should feel genuine and human, never robotic or sales-like.',
-        },
         {
           role: 'user',
           content: prompt,
         },
       ],
-      max_tokens: 150,
-      temperature: 0.7,
     })
 
-    const personalizedInsert =
-      completion.choices[0]?.message?.content?.trim() || ''
+    // Extract text content from Anthropic response
+    const textContent = message.content.find((block) => block.type === 'text')
+    const personalizedInsert = textContent?.type === 'text' ? textContent.text.trim() : ''
 
     if (!personalizedInsert) {
       return NextResponse.json(
@@ -190,10 +186,10 @@ export async function POST(req: NextRequest) {
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error occurred'
 
-    // Check for specific OpenAI errors
-    if (errorMessage.includes('API key')) {
+    // Check for specific Anthropic errors
+    if (errorMessage.includes('API key') || errorMessage.includes('authentication')) {
       return NextResponse.json(
-        { error: 'Invalid or missing OpenAI API key' },
+        { error: 'Invalid or missing Anthropic API key' },
         { status: 500 }
       )
     }
