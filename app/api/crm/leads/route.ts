@@ -121,6 +121,21 @@ export async function PUT(req: Request) {
       type,
     } = body;
 
+    // Verify user has access to this lead before updating
+    const existingLead = await prismadb.crm_Leads.findFirst({
+      where: {
+        id,
+        assigned_to: userId,
+      },
+    });
+
+    if (!existingLead) {
+      return NextResponse.json(
+        { error: "Lead not found or access denied" },
+        { status: 403 }
+      );
+    }
+
     const updatedLead = await prismadb.crm_Leads.update({
       where: {
         id,

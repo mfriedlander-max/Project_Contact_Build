@@ -44,6 +44,9 @@ const CrmModuleMenu = ({ open, localizations }: Props) => {
           <DropdownMenuItem onClick={() => router.push("/crm/dashboard")}>
             Dashboard
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push("/crm/workflow")}>
+            Workflow Dashboard
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push("/crm/dashboard/user")}>
             My Dashboard
           </DropdownMenuItem>

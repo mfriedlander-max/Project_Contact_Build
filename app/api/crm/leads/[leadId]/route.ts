@@ -17,6 +17,21 @@ export async function DELETE(req: Request, props: { params: Promise<{ leadId: st
   }
 
   try {
+    // Verify user has access to this lead before deletion
+    const lead = await prismadb.crm_Leads.findFirst({
+      where: {
+        id: params.leadId,
+        assigned_to: session.user.id,
+      },
+    });
+
+    if (!lead) {
+      return NextResponse.json(
+        { error: "Lead not found or access denied" },
+        { status: 403 }
+      );
+    }
+
     await prismadb.crm_Leads.delete({
       where: {
         id: params.leadId,
@@ -25,7 +40,9 @@ export async function DELETE(req: Request, props: { params: Promise<{ leadId: st
 
     return NextResponse.json({ message: "Lead deleted" }, { status: 200 });
   } catch (error) {
-    console.log("[LEAD_DELETE]", error);
-    return new NextResponse("Initial error", { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to delete lead" },
+      { status: 500 }
+    );
   }
 }

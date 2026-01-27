@@ -21,6 +21,21 @@ export async function PUT(req: Request, props: { params: Promise<{ opportunityId
   const { destination } = body;
 
   try {
+    // Verify user has access to this opportunity before updating
+    const opportunity = await prismadb.crm_Opportunities.findFirst({
+      where: {
+        id: params.opportunityId,
+        assigned_to: session.user.id,
+      },
+    });
+
+    if (!opportunity) {
+      return NextResponse.json(
+        { error: "Opportunity not found or access denied" },
+        { status: 403 }
+      );
+    }
+
     await prismadb.crm_Opportunities.update({
       where: {
         id: params.opportunityId,
@@ -30,7 +45,11 @@ export async function PUT(req: Request, props: { params: Promise<{ opportunityId
       },
     });
 
+    // Return only opportunities assigned to the current user
     const data = await prismadb.crm_Opportunities.findMany({
+      where: {
+        assigned_to: session.user.id,
+      },
       include: {
         assigned_to_user: {
           select: {
@@ -43,12 +62,13 @@ export async function PUT(req: Request, props: { params: Promise<{ opportunityId
 
     return NextResponse.json(
       { message: "Opportunity updated", data },
-
       { status: 200 }
     );
   } catch (error) {
-    console.log("[OPPORTUNITY_UPDATE]", error);
-    return new NextResponse("Initial error", { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to update opportunity" },
+      { status: 500 }
+    );
   }
 }
 
@@ -65,6 +85,21 @@ export async function DELETE(req: Request, props: { params: Promise<{ opportunit
   }
 
   try {
+    // Verify user has access to this opportunity before deletion
+    const opportunity = await prismadb.crm_Opportunities.findFirst({
+      where: {
+        id: params.opportunityId,
+        assigned_to: session.user.id,
+      },
+    });
+
+    if (!opportunity) {
+      return NextResponse.json(
+        { error: "Opportunity not found or access denied" },
+        { status: 403 }
+      );
+    }
+
     await prismadb.crm_Opportunities.delete({
       where: {
         id: params.opportunityId,
@@ -76,7 +111,9 @@ export async function DELETE(req: Request, props: { params: Promise<{ opportunit
       { status: 200 }
     );
   } catch (error) {
-    console.log("[OPPORTUNITY_DELETE]", error);
-    return new NextResponse("Initial error", { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to delete opportunity" },
+      { status: 500 }
+    );
   }
 }

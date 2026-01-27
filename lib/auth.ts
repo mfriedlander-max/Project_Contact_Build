@@ -32,6 +32,13 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: getGoogleCredentials().clientId,
       clientSecret: getGoogleCredentials().clientSecret,
+      authorization: {
+        params: {
+          scope: "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose",
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
     }),
 
     GitHubProvider({
@@ -81,8 +88,24 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
+    // Capture the access token from the OAuth flow
+    async jwt({ token, account }: { token: any; account: any }) {
+      // On initial sign in, persist the access token
+      if (account) {
+        token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
+        token.accessTokenExpires = account.expires_at
+          ? account.expires_at * 1000
+          : undefined;
+      }
+      return token;
+    },
     //TODO: fix this any
     async session({ token, session }: any) {
+      // Pass the access token to the session for Gmail API access
+      if (token.accessToken) {
+        session.accessToken = token.accessToken;
+      }
       const user = await prismadb.users.findFirst({
         where: {
           email: token.email,

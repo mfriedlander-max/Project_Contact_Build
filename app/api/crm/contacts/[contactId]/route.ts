@@ -18,6 +18,21 @@ export async function DELETE(req: Request, props: { params: Promise<{ contactId:
   }
 
   try {
+    // Verify user has access to this contact before deletion
+    const contact = await prismadb.crm_Contacts.findFirst({
+      where: {
+        id: params.contactId,
+        assigned_to: session.user.id,
+      },
+    });
+
+    if (!contact) {
+      return NextResponse.json(
+        { error: "Contact not found or access denied" },
+        { status: 403 }
+      );
+    }
+
     await prismadb.crm_Contacts.delete({
       where: {
         id: params.contactId,
@@ -26,7 +41,9 @@ export async function DELETE(req: Request, props: { params: Promise<{ contactId:
 
     return NextResponse.json({ message: "Contact deleted" }, { status: 200 });
   } catch (error) {
-    console.log("[CONTACT_DELETE]", error);
-    return new NextResponse("Initial error", { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to delete contact" },
+      { status: 500 }
+    );
   }
 }

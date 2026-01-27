@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import sendEmail from "@/lib/sendmail";
 import { z } from "zod";
+import type { ConnectionLevel } from "@prisma/client";
 
 // Validation schema for connection level enum
 const connectionLevelEnum = z.enum([
@@ -14,11 +15,11 @@ const connectionLevelEnum = z.enum([
   "FRIENDS",
 ]);
 
-// Validation helper
-function validateConnectionLevel(value: string | undefined | null): string | undefined {
+// Validation helper - returns proper Prisma enum type
+function validateConnectionLevel(value: string | undefined | null): ConnectionLevel | undefined {
   if (!value) return undefined;
   const result = connectionLevelEnum.safeParse(value);
-  return result.success ? result.data : undefined;
+  return result.success ? result.data as ConnectionLevel : undefined;
 }
 
 //Create route
@@ -189,6 +190,21 @@ export async function PUT(req: Request) {
 
     // Validate connection_level enum
     const validatedConnectionLevel = validateConnectionLevel(connection_level);
+
+    // Verify user has access to this contact before updating
+    const existingContact = await prismadb.crm_Contacts.findFirst({
+      where: {
+        id,
+        assigned_to: userId,
+      },
+    });
+
+    if (!existingContact) {
+      return NextResponse.json(
+        { error: "Contact not found or access denied" },
+        { status: 403 }
+      );
+    }
 
     const newContact = await prismadb.crm_Contacts.update({
       where: {

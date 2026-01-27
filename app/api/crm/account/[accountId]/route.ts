@@ -13,6 +13,21 @@ export async function DELETE(req: Request, props: { params: Promise<{ accountId:
   }
 
   try {
+    // Verify user has access to this account before deletion
+    const account = await prismadb.crm_Accounts.findFirst({
+      where: {
+        id: params.accountId,
+        assigned_to: session.user.id,
+      },
+    });
+
+    if (!account) {
+      return NextResponse.json(
+        { error: "Account not found or access denied" },
+        { status: 403 }
+      );
+    }
+
     await prismadb.crm_Accounts.delete({
       where: {
         id: params.accountId,
@@ -21,7 +36,9 @@ export async function DELETE(req: Request, props: { params: Promise<{ accountId:
 
     return NextResponse.json({ message: "Account deleted" }, { status: 200 });
   } catch (error) {
-    console.log("[ACCOUNT_DELETE]", error);
-    return new NextResponse("Initial error", { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to delete account" },
+      { status: 500 }
+    );
   }
 }

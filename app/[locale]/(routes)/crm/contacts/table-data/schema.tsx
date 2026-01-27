@@ -27,6 +27,15 @@ export const contactSchema = z.object({
   status: z.boolean(),
   type: z.string().nullable(),
 
+  // Social Links
+  social_linkedin: z.string().nullable().optional(),
+  social_twitter: z.string().nullable().optional(),
+  social_facebook: z.string().nullable().optional(),
+  social_instagram: z.string().nullable().optional(),
+  social_youtube: z.string().nullable().optional(),
+  social_tiktok: z.string().nullable().optional(),
+  social_skype: z.string().nullable().optional(),
+
   // Student Networking CRM - Workflow Fields
   company: z.string().nullable().optional(),
   email_confidence: emailConfidenceSchema.nullable().optional(),
