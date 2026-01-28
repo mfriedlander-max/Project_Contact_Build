@@ -125,9 +125,57 @@ As the Architect, you are the orchestration layer between the human user and wor
 4. **Architect → User**: Provides copy-paste prompts for each agent
 5. **User → Agents**: Pastes prompts into each window
 6. **Agents → Status Docs**: Update progress in `/status/` folder
-7. **Architect → Status Docs**: Monitors progress, coordinates
-8. **Architect → User**: Reports completion or escalates issues
-9. **User**: Reviews final output, approves merge
+7. **Agents → User**: "Task XXX complete" (agent notifies user directly)
+8. **User → Architect**: "Agent 2 finished task-001" (user relays to architect)
+9. **Architect → Status Docs**: Reads status, coordinates next steps
+10. **Architect → User**: Reports completion or escalates issues
+11. **User**: Reviews final output, approves merge
+
+### Status Update Protocol
+
+**How the Architect knows when agents complete:**
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  WORKER AGENT   │     │      USER       │     │    ARCHITECT    │
+│                 │     │                 │     │                 │
+│  Completes task │     │                 │     │                 │
+│        │        │     │                 │     │                 │
+│        ▼        │     │                 │     │                 │
+│  Updates status │     │                 │     │                 │
+│  doc to 🟢      │     │                 │     │                 │
+│        │        │     │                 │     │                 │
+│        ▼        │     │                 │     │                 │
+│  Says to user:  │────▶│  Receives       │     │                 │
+│  "Task XXX done"│     │  notification   │     │                 │
+│                 │     │        │        │     │                 │
+│                 │     │        ▼        │     │                 │
+│                 │     │  Tells Architect│────▶│  Reads status   │
+│                 │     │  "Agent finished│     │  doc            │
+│                 │     │   task-001"     │     │        │        │
+│                 │     │                 │     │        ▼        │
+│                 │     │                 │     │  Coordinates    │
+│                 │     │                 │     │  next steps     │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+**Agent's completion message (included in prompts):**
+```
+When you complete your task, tell the user:
+"✅ Task [XXX] complete. Status doc updated. Ready for architect coordination."
+```
+
+**User's relay to Architect:**
+```
+"Agent 2 finished task-001"
+or
+"Check status - agents 2 and 3 are done"
+```
+
+**Architect's response:**
+1. Read the relevant status doc(s)
+2. Verify completion
+3. Coordinate next steps (merge, start dependent tasks, etc.)
 
 ### Avoiding Conflicts
 
@@ -626,6 +674,17 @@ This will present options for:
 
 ## Status Documentation
 
+### When to Use Status Docs
+
+| Task Type | Status Docs? | Reason |
+|-----------|--------------|--------|
+| **Single agent, simple task** | ❌ Optional | Direct completion message to user is enough |
+| **Single agent, complex task** | ✅ Recommended | Preserves context, documents blockers |
+| **Multi-agent work** | ✅ Required | Handoff notes, coordination, history |
+| **Any task with dependencies** | ✅ Required | Next agent needs to know what was done |
+
+**Rule of thumb**: If another agent (or future you) needs to understand what was done, use a status doc.
+
 ### Status Folder Structure
 
 ```
@@ -773,7 +832,7 @@ After each major step, add a log entry:
 1. Update status doc to 🟢 Complete
 2. Add handoff notes for the next agent
 3. Commit your changes with message: `feat(task-XXX): [description]`
-4. Notify user: "Task XXX complete, ready for review"
+4. **Tell the user**: "✅ Task XXX complete. Status doc updated. Ready for architect coordination."
 
 ## When Blocked
 1. Update status doc to 🔴 Blocked
