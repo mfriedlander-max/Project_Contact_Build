@@ -34,7 +34,7 @@ describe('executeInsertStage', () => {
     vi.clearAllMocks()
   })
 
-  it('should fetch page and generate insert for contacts with URLs', async () => {
+  it('should return new contacts with insert data (immutable)', async () => {
     mockFetchPages.mockResolvedValue([
       { url: 'https://acme.com/john', title: 'John', text: 'John is a PM at Acme', fetchedAt: new Date() },
     ])
@@ -43,14 +43,19 @@ describe('executeInsertStage', () => {
       confidence: 'HIGH',
     })
 
-    const contacts = [makeContact()]
-    const result = await executeInsertStage(contacts)
+    const original = makeContact()
+    const result = await executeInsertStage([original])
 
     expect(result.generated).toBe(1)
     expect(result.skipped).toBe(0)
     expect(result.errors).toHaveLength(0)
-    expect(contacts[0].personalized_insert).toBe('I saw your work on product launches at Acme.')
-    expect(contacts[0].insert_confidence).toBe('HIGH')
+
+    // Original should not be mutated
+    expect(original.personalized_insert).toBeUndefined()
+
+    // Returned contact has insert
+    expect(result.contacts[0].personalized_insert).toBe('I saw your work on product launches at Acme.')
+    expect(result.contacts[0].insert_confidence).toBe('HIGH')
   })
 
   it('should skip contacts without website URL', async () => {
@@ -59,14 +64,14 @@ describe('executeInsertStage', () => {
 
     expect(result.generated).toBe(0)
     expect(result.skipped).toBe(1)
+    expect(result.contacts).toHaveLength(1)
     expect(mockFetchPages).not.toHaveBeenCalled()
   })
 
   it('should skip when page fetch returns no pages', async () => {
     mockFetchPages.mockResolvedValue([])
 
-    const contacts = [makeContact()]
-    const result = await executeInsertStage(contacts)
+    const result = await executeInsertStage([makeContact()])
 
     expect(result.generated).toBe(0)
     expect(result.skipped).toBe(1)
@@ -89,9 +94,9 @@ describe('executeInsertStage', () => {
     const result = await executeInsertStage(contacts)
 
     expect(result.generated).toBe(1)
-    expect(result.errors).toEqual([
-      { contactId: 'c2', error: 'Anthropic API down' },
-    ])
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].contactId).toBe('c2')
+    expect(result.contacts).toHaveLength(2)
   })
 
   it('should call progress callback', async () => {

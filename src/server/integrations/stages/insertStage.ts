@@ -6,23 +6,33 @@
 import { pageFetcher } from '../pageFetcher'
 import { generateInsert } from '../insertGenerator'
 import type { Contact, ProgressCallback, InsertStageResult } from './types'
+import { sanitizeErrorMessage, safeProgress } from './types'
 
 export type { InsertStageResult }
 
+/**
+ * Generate personalized email inserts for a batch of contacts.
+ * Fetches each contact's website, then uses AI to generate an insert.
+ * Returns a new contacts array with insert fields populated (immutable).
+ *
+ * Contacts without a website URL are skipped.
+ */
 export async function executeInsertStage(
-  contacts: Contact[],
+  contacts: ReadonlyArray<Contact>,
   onProgress?: ProgressCallback
 ): Promise<InsertStageResult> {
   let generated = 0
   let skipped = 0
   const errors: InsertStageResult['errors'] = []
+  const updatedContacts: Contact[] = []
 
   for (let i = 0; i < contacts.length; i++) {
     const contact = contacts[i]
 
     if (!contact.website) {
       skipped++
-      onProgress?.(i + 1, contacts.length)
+      updatedContacts.push(contact)
+      safeProgress(onProgress, i + 1, contacts.length)
       continue
     }
 
@@ -31,7 +41,8 @@ export async function executeInsertStage(
 
       if (pages.length === 0) {
         skipped++
-        onProgress?.(i + 1, contacts.length)
+        updatedContacts.push(contact)
+        safeProgress(onProgress, i + 1, contacts.length)
         continue
       }
 
@@ -44,16 +55,19 @@ export async function executeInsertStage(
         pages[0].text
       )
 
-      contact.personalized_insert = result.insert
-      contact.insert_confidence = result.confidence
+      updatedContacts.push({
+        ...contact,
+        personalized_insert: result.insert,
+        insert_confidence: result.confidence,
+      })
       generated++
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      errors.push({ contactId: contact.id, error: message })
+      errors.push({ contactId: contact.id, error: sanitizeErrorMessage(error) })
+      updatedContacts.push(contact)
     }
 
-    onProgress?.(i + 1, contacts.length)
+    safeProgress(onProgress, i + 1, contacts.length)
   }
 
-  return { generated, skipped, errors }
+  return { contacts: updatedContacts, generated, skipped, errors }
 }

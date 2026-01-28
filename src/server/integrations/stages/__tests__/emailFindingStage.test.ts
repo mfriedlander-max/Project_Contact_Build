@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Contact } from '@/lib/types/contact'
-import type { EmailFindResult } from '../../hunterService'
 
 vi.mock('../../hunterService', () => ({
   hunterService: {
@@ -45,6 +44,7 @@ describe('executeEmailFindingStage', () => {
     expect(result.found).toBe(2)
     expect(result.notFound).toBe(0)
     expect(result.errors).toHaveLength(0)
+    expect(result.contacts).toHaveLength(2)
     expect(mockFindEmail).toHaveBeenCalledTimes(2)
     expect(mockFindEmail).toHaveBeenCalledWith('user1', {
       firstName: 'John',
@@ -86,9 +86,8 @@ describe('executeEmailFindingStage', () => {
 
     expect(result.found).toBe(2)
     expect(result.notFound).toBe(0)
-    expect(result.errors).toEqual([
-      { contactId: 'c2', error: 'API rate limited' },
-    ])
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].contactId).toBe('c2')
   })
 
   it('should call progress callback after each contact', async () => {
@@ -114,20 +113,34 @@ describe('executeEmailFindingStage', () => {
     expect(result.notFound).toBe(1)
   })
 
-  it('should update contact email and confidence in returned results', async () => {
+  it('should return new contact objects with email data (immutable)', async () => {
     mockFindEmail.mockResolvedValue({
       email: 'john@acme.com',
       confidence: 'HIGH',
       sources: ['acme.com'],
     })
 
-    const contacts = [makeContact({ id: 'c1' })]
+    const original = makeContact({ id: 'c1' })
+    const result = await executeEmailFindingStage([original], 'user1')
 
-    await executeEmailFindingStage(contacts, 'user1')
+    // Original should not be mutated
+    expect(original.email).toBeUndefined()
+    expect(original.email_confidence).toBeUndefined()
 
-    // Verify the contact was mutated with email data
-    // (stage executors mutate the passed contacts array for downstream stages)
-    expect(contacts[0].email).toBe('john@acme.com')
-    expect(contacts[0].email_confidence).toBe('HIGH')
+    // Returned contact should have email data
+    expect(result.contacts[0].email).toBe('john@acme.com')
+    expect(result.contacts[0].email_confidence).toBe('HIGH')
+  })
+
+  it('should not crash if progress callback throws', async () => {
+    mockFindEmail.mockResolvedValue({ email: 'a@b.com', confidence: 'HIGH', sources: [] })
+
+    const onProgress = vi.fn().mockImplementation(() => {
+      throw new Error('callback error')
+    })
+
+    const result = await executeEmailFindingStage([makeContact()], 'user1', onProgress)
+
+    expect(result.found).toBe(1)
   })
 })

@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Contact } from '@/lib/types/contact'
 
-// Mock the fetch function used by fetchThreadMessageCount
 const mockFetch = vi.fn()
 global.fetch = mockFetch
 
 import { checkForReplies } from '../gmailSync'
+
+const VALID_TOKEN = 'ya29.a0AbVbY6Pz3example-valid-token'
 
 function makeContact(overrides: Partial<Contact> = {}): Contact {
   return {
@@ -36,46 +37,47 @@ describe('checkForReplies', () => {
     vi.clearAllMocks()
   })
 
-  it('should detect replies and update contact to CONNECTED', async () => {
+  it('should detect replies and return new contacts with CONNECTED (immutable)', async () => {
     mockFetch.mockResolvedValue(mockThreadResponse(2))
 
-    const contacts = [makeContact()]
-    const result = await checkForReplies('test-token', contacts)
+    const original = makeContact()
+    const result = await checkForReplies(VALID_TOKEN, [original])
 
     expect(result.repliesFound).toBe(1)
     expect(result.checked).toBe(1)
-    expect(contacts[0].connection_level).toBe('CONNECTED')
+
+    // Original not mutated
+    expect(original.connection_level).toBe('MESSAGE_SENT')
+
+    // Returned contact updated
+    expect(result.contacts[0].connection_level).toBe('CONNECTED')
   })
 
   it('should not update contact if only one message in thread (no reply)', async () => {
     mockFetch.mockResolvedValue(mockThreadResponse(1))
 
-    const contacts = [makeContact()]
-    const result = await checkForReplies('test-token', contacts)
+    const result = await checkForReplies(VALID_TOKEN, [makeContact()])
 
     expect(result.repliesFound).toBe(0)
-    expect(contacts[0].connection_level).toBe('MESSAGE_SENT')
+    expect(result.contacts[0].connection_level).toBe('MESSAGE_SENT')
   })
 
   it('should skip contacts without email', async () => {
-    const contacts = [makeContact({ email: undefined })]
-    const result = await checkForReplies('test-token', contacts)
+    const result = await checkForReplies(VALID_TOKEN, [makeContact({ email: undefined })])
 
     expect(result.checked).toBe(0)
     expect(mockFetch).not.toHaveBeenCalled()
   })
 
   it('should skip contacts not in SENT status', async () => {
-    const contacts = [makeContact({ email_status: 'BLANK' })]
-    const result = await checkForReplies('test-token', contacts)
+    const result = await checkForReplies(VALID_TOKEN, [makeContact({ email_status: 'BLANK' })])
 
     expect(result.checked).toBe(0)
     expect(mockFetch).not.toHaveBeenCalled()
   })
 
   it('should skip contacts without thread id', async () => {
-    const contacts = [makeContact({ custom_fields: undefined })]
-    const result = await checkForReplies('test-token', contacts)
+    const result = await checkForReplies(VALID_TOKEN, [makeContact({ custom_fields: undefined })])
 
     expect(result.checked).toBe(0)
     expect(mockFetch).not.toHaveBeenCalled()
@@ -84,12 +86,16 @@ describe('checkForReplies', () => {
   it('should collect errors per-contact', async () => {
     mockFetch.mockResolvedValue({ ok: false, status: 401 })
 
-    const contacts = [makeContact({ id: 'c1' })]
-    const result = await checkForReplies('test-token', contacts)
+    const result = await checkForReplies(VALID_TOKEN, [makeContact({ id: 'c1' })])
 
-    expect(result.errors).toEqual([
-      { contactId: 'c1', error: 'Gmail API error: HTTP 401' },
-    ])
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].contactId).toBe('c1')
     expect(result.repliesFound).toBe(0)
+  })
+
+  it('should reject invalid access token', async () => {
+    await expect(
+      checkForReplies('short', [makeContact()])
+    ).rejects.toThrow('Invalid access token format')
   })
 })

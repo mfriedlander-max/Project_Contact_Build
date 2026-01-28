@@ -5,6 +5,7 @@
 
 import { gmailService } from '../gmailService'
 import type { Contact, ProgressCallback, SendStageResult } from './types'
+import { sanitizeErrorMessage, safeProgress } from './types'
 
 export type { SendStageResult }
 
@@ -13,14 +14,21 @@ function getDraftId(contact: Contact): string | undefined {
   return typeof draftId === 'string' ? draftId : undefined
 }
 
+/**
+ * Send Gmail drafts for a batch of contacts.
+ * Returns a new contacts array with status updated to SENT (immutable).
+ *
+ * Contacts without a gmail_draft_id in custom_fields are skipped.
+ */
 export async function executeSendStage(
-  contacts: Contact[],
+  contacts: ReadonlyArray<Contact>,
   userId: string,
   onProgress?: ProgressCallback
 ): Promise<SendStageResult> {
   let sent = 0
   let skipped = 0
   const errors: SendStageResult['errors'] = []
+  const updatedContacts: Contact[] = []
 
   for (let i = 0; i < contacts.length; i++) {
     const contact = contacts[i]
@@ -28,24 +36,28 @@ export async function executeSendStage(
 
     if (!draftId) {
       skipped++
-      onProgress?.(i + 1, contacts.length)
+      updatedContacts.push(contact)
+      safeProgress(onProgress, i + 1, contacts.length)
       continue
     }
 
     try {
       await gmailService.sendDraft(userId, { draftId })
 
-      contact.email_status = 'SENT'
-      contact.connection_level = 'MESSAGE_SENT'
-      contact.sent_at = new Date()
+      updatedContacts.push({
+        ...contact,
+        email_status: 'SENT',
+        connection_level: 'MESSAGE_SENT',
+        sent_at: new Date(),
+      })
       sent++
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      errors.push({ contactId: contact.id, error: message })
+      errors.push({ contactId: contact.id, error: sanitizeErrorMessage(error) })
+      updatedContacts.push(contact)
     }
 
-    onProgress?.(i + 1, contacts.length)
+    safeProgress(onProgress, i + 1, contacts.length)
   }
 
-  return { sent, skipped, errors }
+  return { contacts: updatedContacts, sent, skipped, errors }
 }

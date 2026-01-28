@@ -27,39 +27,35 @@ describe('executeSendStage', () => {
     vi.clearAllMocks()
   })
 
-  it('should send drafts for contacts with draft status', async () => {
+  it('should send drafts and return new contacts with SENT status (immutable)', async () => {
     mockSendDraft.mockResolvedValue(undefined)
 
-    const contacts = [
-      makeContact({ id: 'c1', custom_fields: { gmail_draft_id: 'draft-1' } }),
-    ]
-    const result = await executeSendStage(contacts, 'user1')
+    const original = makeContact({ custom_fields: { gmail_draft_id: 'draft-1' } })
+    const result = await executeSendStage([original], 'user1')
 
     expect(result.sent).toBe(1)
     expect(result.skipped).toBe(0)
     expect(result.errors).toHaveLength(0)
     expect(mockSendDraft).toHaveBeenCalledWith('user1', { draftId: 'draft-1' })
+
+    // Original should not be mutated
+    expect(original.email_status).toBe('DRAFTED')
+
+    // Returned contact has SENT status
+    expect(result.contacts[0].email_status).toBe('SENT')
+    expect(result.contacts[0].connection_level).toBe('MESSAGE_SENT')
+    expect(result.contacts[0].sent_at).toBeInstanceOf(Date)
   })
 
   it('should skip contacts without draft id', async () => {
-    const contacts = [makeContact({ custom_fields: undefined })]
-    const result = await executeSendStage(contacts, 'user1')
+    const result = await executeSendStage(
+      [makeContact({ custom_fields: undefined })],
+      'user1'
+    )
 
     expect(result.skipped).toBe(1)
     expect(result.sent).toBe(0)
     expect(mockSendDraft).not.toHaveBeenCalled()
-  })
-
-  it('should update contact status to SENT after sending', async () => {
-    mockSendDraft.mockResolvedValue(undefined)
-
-    const contacts = [
-      makeContact({ custom_fields: { gmail_draft_id: 'draft-1' } }),
-    ]
-    await executeSendStage(contacts, 'user1')
-
-    expect(contacts[0].email_status).toBe('SENT')
-    expect(contacts[0].connection_level).toBe('MESSAGE_SENT')
   })
 
   it('should collect errors without crashing batch', async () => {
@@ -74,19 +70,20 @@ describe('executeSendStage', () => {
     const result = await executeSendStage(contacts, 'user1')
 
     expect(result.sent).toBe(1)
-    expect(result.errors).toEqual([
-      { contactId: 'c2', error: 'Draft already sent' },
-    ])
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].contactId).toBe('c2')
+    expect(result.contacts).toHaveLength(2)
   })
 
   it('should call progress callback', async () => {
     mockSendDraft.mockResolvedValue(undefined)
     const onProgress = vi.fn()
 
-    const contacts = [
-      makeContact({ custom_fields: { gmail_draft_id: 'd1' } }),
-    ]
-    await executeSendStage(contacts, 'user1', onProgress)
+    await executeSendStage(
+      [makeContact({ custom_fields: { gmail_draft_id: 'd1' } })],
+      'user1',
+      onProgress
+    )
 
     expect(onProgress).toHaveBeenCalledWith(1, 1)
   })
