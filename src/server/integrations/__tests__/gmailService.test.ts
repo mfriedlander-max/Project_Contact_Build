@@ -1,12 +1,43 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+vi.mock('@/lib/prisma', () => ({
+  prismadb: {
+    integrationConnection: {
+      findUnique: vi.fn(),
+    },
+  },
+}))
+
+const mockFetch = vi.fn()
+global.fetch = mockFetch
+
 import {
   gmailService,
   type GmailDraft,
   type CreateDraftOptions,
   type SendOptions,
 } from '../gmailService'
+import { prismadb } from '@/lib/prisma'
+
+const mockFindUnique = vi.mocked(prismadb.integrationConnection.findUnique)
+
+const USER_ID = 'user-123'
+const MOCK_GMAIL_INTEGRATION = {
+  id: 'conn-1',
+  provider: 'GMAIL' as const,
+  userId: USER_ID,
+  accessToken: 'gmail-access-token',
+  refreshToken: 'gmail-refresh-token',
+  isActive: true,
+  expiresAt: new Date(Date.now() + 3600000),
+  metadata: null,
+}
 
 describe('gmailService', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   describe('types', () => {
     it('should have correct GmailDraft shape', () => {
       const draft: GmailDraft = {
@@ -29,96 +60,175 @@ describe('gmailService', () => {
       }
 
       expect(options.to).toBe('recipient@example.com')
-      expect(options.subject).toBe('Test Subject')
-      expect(options.body).toBe('Test body content')
       expect(options.labelNames).toHaveLength(2)
     })
 
     it('should have correct SendOptions shape', () => {
-      const options: SendOptions = {
-        draftId: 'draft-123',
-      }
-
+      const options: SendOptions = { draftId: 'draft-123' }
       expect(options.draftId).toBe('draft-123')
     })
   })
 
   describe('isConnected', () => {
-    it('should be a function', () => {
-      expect(typeof gmailService.isConnected).toBe('function')
+    it('returns true when Gmail integration exists and is active', async () => {
+      mockFindUnique.mockResolvedValueOnce(MOCK_GMAIL_INTEGRATION)
+
+      const result = await gmailService.isConnected(USER_ID)
+      expect(result).toBe(true)
     })
 
-    it('should throw "not implemented" error (stub behavior)', async () => {
-      await expect(gmailService.isConnected('user-123')).rejects.toThrow(
-        'Not implemented - Phase 2'
-      )
+    it('returns false when no integration exists', async () => {
+      mockFindUnique.mockResolvedValueOnce(null)
+
+      const result = await gmailService.isConnected(USER_ID)
+      expect(result).toBe(false)
+    })
+
+    it('returns false when integration has no access token', async () => {
+      mockFindUnique.mockResolvedValueOnce({
+        ...MOCK_GMAIL_INTEGRATION,
+        accessToken: null,
+      })
+
+      const result = await gmailService.isConnected(USER_ID)
+      expect(result).toBe(false)
     })
   })
 
   describe('ensureLabels', () => {
-    it('should be a function', () => {
-      expect(typeof gmailService.ensureLabels).toBe('function')
+    it('creates labels that do not exist', async () => {
+      mockFindUnique.mockResolvedValueOnce(MOCK_GMAIL_INTEGRATION)
+      // List labels - none exist
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ labels: [] }),
+      })
+      // Create label 1
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: 'label-1', name: 'CRM' }),
+      })
+
+      await gmailService.ensureLabels(USER_ID, ['CRM'])
+
+      expect(mockFetch).toHaveBeenCalledTimes(2)
     })
 
-    it('should throw "not implemented" error (stub behavior)', async () => {
-      await expect(
-        gmailService.ensureLabels('user-123', ['Label1', 'Label2'])
-      ).rejects.toThrow('Not implemented - Phase 2')
+    it('skips labels that already exist', async () => {
+      mockFindUnique.mockResolvedValueOnce(MOCK_GMAIL_INTEGRATION)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          labels: [{ id: 'label-1', name: 'CRM' }],
+        }),
+      })
+
+      await gmailService.ensureLabels(USER_ID, ['CRM'])
+
+      // Only 1 call: list labels. No create call needed.
+      expect(mockFetch).toHaveBeenCalledTimes(1)
     })
   })
 
   describe('createDraft', () => {
-    it('should be a function', () => {
-      expect(typeof gmailService.createDraft).toBe('function')
+    it('creates a draft email via Gmail API', async () => {
+      mockFindUnique.mockResolvedValueOnce(MOCK_GMAIL_INTEGRATION)
+      // Create draft (no label mocks needed - labelNames is empty)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          id: 'draft-123',
+          message: { id: 'msg-456', threadId: 'thread-789' },
+        }),
+      })
+
+      const result = await gmailService.createDraft(USER_ID, {
+        to: 'jane@example.com',
+        subject: 'Hello',
+        body: 'Hi Jane!',
+        labelNames: [],
+      })
+
+      expect(result.id).toBe('draft-123')
+      expect(result.messageId).toBe('msg-456')
+      expect(result.threadId).toBe('thread-789')
     })
 
-    it('should throw "not implemented" error (stub behavior)', async () => {
-      const options: CreateDraftOptions = {
-        to: 'test@example.com',
-        subject: 'Test',
-        body: 'Body',
-        labelNames: [],
-      }
+    it('throws when Gmail is not configured', async () => {
+      mockFindUnique.mockResolvedValueOnce(null)
 
       await expect(
-        gmailService.createDraft('user-123', options)
-      ).rejects.toThrow('Not implemented - Phase 2')
+        gmailService.createDraft(USER_ID, {
+          to: 'test@example.com',
+          subject: 'Test',
+          body: 'Body',
+          labelNames: [],
+        })
+      ).rejects.toThrow('Gmail is not configured')
     })
   })
 
   describe('sendDraft', () => {
-    it('should be a function', () => {
-      expect(typeof gmailService.sendDraft).toBe('function')
+    it('sends an existing draft', async () => {
+      mockFindUnique.mockResolvedValueOnce(MOCK_GMAIL_INTEGRATION)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: 'msg-sent', threadId: 'thread-1' }),
+      })
+
+      await gmailService.sendDraft(USER_ID, { draftId: 'draft-123' })
+
+      expect(mockFetch).toHaveBeenCalledTimes(1)
     })
 
-    it('should throw "not implemented" error (stub behavior)', async () => {
+    it('throws on API error', async () => {
+      mockFindUnique.mockResolvedValueOnce(MOCK_GMAIL_INTEGRATION)
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ error: { message: 'Draft not found' } }),
+      })
+
       await expect(
-        gmailService.sendDraft('user-123', { draftId: 'draft-123' })
-      ).rejects.toThrow('Not implemented - Phase 2')
+        gmailService.sendDraft(USER_ID, { draftId: 'nonexistent' })
+      ).rejects.toThrow('Gmail API error')
     })
   })
 
   describe('isDraftSent', () => {
-    it('should be a function', () => {
-      expect(typeof gmailService.isDraftSent).toBe('function')
+    it('returns true when draft no longer exists (was sent)', async () => {
+      mockFindUnique.mockResolvedValueOnce(MOCK_GMAIL_INTEGRATION)
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({}),
+      })
+
+      const result = await gmailService.isDraftSent(USER_ID, 'draft-123')
+      expect(result).toBe(true)
     })
 
-    it('should throw "not implemented" error (stub behavior)', async () => {
-      await expect(
-        gmailService.isDraftSent('user-123', 'draft-123')
-      ).rejects.toThrow('Not implemented - Phase 2')
+    it('returns false when draft still exists', async () => {
+      mockFindUnique.mockResolvedValueOnce(MOCK_GMAIL_INTEGRATION)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: 'draft-123' }),
+      })
+
+      const result = await gmailService.isDraftSent(USER_ID, 'draft-123')
+      expect(result).toBe(false)
     })
   })
 
   describe('syncSentStatus', () => {
-    it('should be a function', () => {
-      expect(typeof gmailService.syncSentStatus).toBe('function')
-    })
+    it('returns updated count', async () => {
+      // This is a higher-level operation that queries contacts
+      // For now, just verify it returns the expected shape
+      mockFindUnique.mockResolvedValueOnce(MOCK_GMAIL_INTEGRATION)
 
-    it('should throw "not implemented" error (stub behavior)', async () => {
-      await expect(gmailService.syncSentStatus('user-123')).rejects.toThrow(
-        'Not implemented - Phase 2'
-      )
+      const result = await gmailService.syncSentStatus(USER_ID)
+      expect(result).toHaveProperty('updatedCount')
+      expect(typeof result.updatedCount).toBe('number')
     })
   })
 })

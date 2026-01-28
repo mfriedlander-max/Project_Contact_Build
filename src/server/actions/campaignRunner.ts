@@ -1,8 +1,6 @@
 /**
  * Campaign Runner State Machine
  * Manages sequential execution of campaign pipeline stages
- *
- * Implementation in Phase 2 (Task 17)
  */
 
 import {
@@ -17,7 +15,6 @@ export type { CampaignRunStateType }
 
 /**
  * Valid state transitions - using central definition
- * Note: We expose a local alias for backward compatibility
  */
 export const VALID_TRANSITIONS: Record<CampaignRunStateType, CampaignRunStateType[]> =
   CAMPAIGN_RUN_STATE_TRANSITIONS
@@ -32,88 +29,158 @@ export interface CampaignRunProgress {
   completedAt?: Date
 }
 
+const MAX_CONTACTS = 30
+
+const TERMINAL_STATES: ReadonlyArray<CampaignRunStateType> = [
+  CampaignRunState.COMPLETE,
+  CampaignRunState.FAILED,
+  CampaignRunState.IDLE,
+]
+
 /**
- * Campaign Runner
- * Enforces single active campaign and sequential processing
+ * Dependency interfaces for testability
+ */
+export interface CampaignRunStore {
+  getActiveRun(userId: string): Promise<CampaignRunProgress | null>
+  getRun(campaignId: string): Promise<CampaignRunProgress | null>
+  createRun(progress: CampaignRunProgress): Promise<void>
+  updateRun(progress: CampaignRunProgress): Promise<void>
+}
+
+export interface CampaignService {
+  getContactCount(campaignId: string): Promise<number>
+}
+
+interface CampaignRunnerDeps {
+  store: CampaignRunStore
+  campaignService?: CampaignService
+}
+
+function isTerminalState(state: CampaignRunStateType): boolean {
+  return TERMINAL_STATES.includes(state)
+}
+
+async function ensureNotRunning(store: CampaignRunStore, userId: string): Promise<void> {
+  const active = await store.getActiveRun(userId)
+  if (active && !isTerminalState(active.state)) {
+    throw new Error('Another campaign is already running')
+  }
+}
+
+async function startStage(
+  deps: CampaignRunnerDeps,
+  userId: string,
+  campaignId: string,
+  state: CampaignRunStateType
+): Promise<CampaignRunProgress> {
+  const { store, campaignService } = deps
+  await ensureNotRunning(store, userId)
+
+  const contactCount = campaignService
+    ? await campaignService.getContactCount(campaignId)
+    : 0
+
+  if (state === CampaignRunState.EMAIL_FINDING_RUNNING && contactCount > MAX_CONTACTS) {
+    throw new Error(`Campaign contact count (${contactCount}) exceeds maximum of 30`)
+  }
+
+  const progress: CampaignRunProgress = {
+    campaignId,
+    state,
+    processedCount: 0,
+    totalCount: contactCount,
+    errors: [],
+    startedAt: new Date(),
+  }
+
+  await store.createRun(progress)
+  return progress
+}
+
+/**
+ * Create a campaign runner with injected dependencies
+ */
+export function createCampaignRunner(deps: CampaignRunnerDeps) {
+  return {
+    isRunning: async (userId: string): Promise<boolean> => {
+      const active = await deps.store.getActiveRun(userId)
+      return active !== null && !isTerminalState(active.state)
+    },
+
+    getStatus: async (campaignId: string): Promise<CampaignRunProgress | null> => {
+      return deps.store.getRun(campaignId)
+    },
+
+    startEmailFinding: (userId: string, campaignId: string) =>
+      startStage(deps, userId, campaignId, CampaignRunState.EMAIL_FINDING_RUNNING),
+
+    startInserts: (userId: string, campaignId: string) =>
+      startStage(deps, userId, campaignId, CampaignRunState.INSERTS_RUNNING),
+
+    startDrafts: (userId: string, campaignId: string, _templateId: string) =>
+      startStage(deps, userId, campaignId, CampaignRunState.DRAFTS_RUNNING),
+
+    startSending: (userId: string, campaignId: string) =>
+      startStage(deps, userId, campaignId, CampaignRunState.SENDING_RUNNING),
+
+    transition: async (
+      campaignId: string,
+      from: CampaignRunStateType,
+      to: CampaignRunStateType
+    ): Promise<CampaignRunProgress> => {
+      const existing = await deps.store.getRun(campaignId)
+      if (!existing) {
+        throw new Error('No run found for campaign')
+      }
+
+      if (existing.state !== from) {
+        throw new Error(
+          `Current state mismatch: expected ${from}, got ${existing.state}`
+        )
+      }
+
+      if (!VALID_TRANSITIONS[from].includes(to)) {
+        throw new Error(`Invalid state transition from ${from} to ${to}`)
+      }
+
+      const updated: CampaignRunProgress = {
+        ...existing,
+        state: to,
+        completedAt: to === CampaignRunState.COMPLETE ? new Date() : existing.completedAt,
+      }
+
+      await deps.store.updateRun(updated)
+      return updated
+    },
+
+    canTransition: (from: CampaignRunStateType, to: CampaignRunStateType): boolean => {
+      return VALID_TRANSITIONS[from].includes(to)
+    },
+  }
+}
+
+/**
+ * Default campaign runner (uses stubs - replaced with real deps in Phase 3)
  */
 export const campaignRunner = {
-  /**
-   * Check if any campaign is currently running
-   */
   isRunning: async (_userId: string): Promise<boolean> => {
-    // TODO: Check CampaignRun table for active runs
-    throw new Error('Not implemented - Phase 2')
+    throw new Error('Not implemented - Phase 2: use createCampaignRunner with deps')
   },
-
-  /**
-   * Get current run status
-   */
   getStatus: async (_campaignId: string): Promise<CampaignRunProgress | null> => {
-    // TODO: Fetch from CampaignRun table
-    throw new Error('Not implemented - Phase 2')
+    throw new Error('Not implemented - Phase 2: use createCampaignRunner with deps')
   },
-
-  /**
-   * Start email finding stage
-   * Validates no other campaign is running, max 30 contacts
-   */
-  startEmailFinding: async (
-    _userId: string,
-    _campaignId: string
-  ): Promise<CampaignRunProgress> => {
-    // TODO:
-    // 1. Check no other campaign running
-    // 2. Check campaign has <= 30 contacts
-    // 3. Create/update CampaignRun to EMAIL_FINDING_RUNNING
-    // 4. Process contacts sequentially with Hunter
-    // 5. Update progress after each contact
-    // 6. Transition to INSERTS_RUNNING or FAILED
-    throw new Error('Not implemented - Phase 2')
+  startEmailFinding: async (_userId: string, _campaignId: string): Promise<CampaignRunProgress> => {
+    throw new Error('Not implemented - Phase 2: use createCampaignRunner with deps')
   },
-
-  /**
-   * Start inserts generation stage
-   */
   startInserts: async (_userId: string, _campaignId: string): Promise<CampaignRunProgress> => {
-    // TODO:
-    // 1. Fetch pages for each contact
-    // 2. Generate insert with Anthropic
-    // 3. Update contact with personalized_insert
-    // 4. Transition to DRAFTS_RUNNING or FAILED
-    throw new Error('Not implemented - Phase 2')
+    throw new Error('Not implemented - Phase 2: use createCampaignRunner with deps')
   },
-
-  /**
-   * Start draft creation stage
-   */
-  startDrafts: async (
-    _userId: string,
-    _campaignId: string,
-    _templateId: string
-  ): Promise<CampaignRunProgress> => {
-    // TODO:
-    // 1. Render template with inserts + availability
-    // 2. Create Gmail drafts with labels
-    // 3. Update contacts with gmailDraftId
-    // 4. Transition to COMPLETE or FAILED
-    throw new Error('Not implemented - Phase 2')
+  startDrafts: async (_userId: string, _campaignId: string, _templateId: string): Promise<CampaignRunProgress> => {
+    throw new Error('Not implemented - Phase 2: use createCampaignRunner with deps')
   },
-
-  /**
-   * Start sending stage (Assistant mode only)
-   */
   startSending: async (_userId: string, _campaignId: string): Promise<CampaignRunProgress> => {
-    // TODO:
-    // 1. Send each draft via Gmail
-    // 2. Move contacts to MESSAGE_SENT stage
-    // 3. Set lastContactedAt
-    // 4. Transition to COMPLETE or FAILED
-    throw new Error('Not implemented - Phase 2')
+    throw new Error('Not implemented - Phase 2: use createCampaignRunner with deps')
   },
-
-  /**
-   * Validate state transition
-   */
   canTransition: (from: CampaignRunStateType, to: CampaignRunStateType): boolean => {
     return VALID_TRANSITIONS[from].includes(to)
   },

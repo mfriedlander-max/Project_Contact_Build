@@ -1,17 +1,15 @@
 /**
  * AI Action Executor
- * Validates mode requirements and executes actions
- *
- * Implementation in Phase 2 (Task 13)
+ * Validates mode requirements, payloads, and confirmation before executing
  */
 
 import {
   AiActionRequest,
   AiActionResult,
   AiActionType,
-  AiMode,
   ACTION_MODE_REQUIREMENTS,
   ACTIONS_REQUIRING_CONFIRMATION,
+  validateActionPayload,
   type AiModeType,
   type AiActionTypeValue,
 } from './types'
@@ -20,6 +18,13 @@ export interface ExecutorContext {
   userId: string
   currentMode: AiModeType
 }
+
+export type ActionHandler = (
+  request: AiActionRequest,
+  context: ExecutorContext
+) => Promise<AiActionResult>
+
+export type ActionHandlers = Record<AiActionTypeValue, ActionHandler>
 
 /**
  * Validate that the current mode allows the action
@@ -49,11 +54,12 @@ export function requiresConfirmation(action: AiActionTypeValue): boolean {
 
 /**
  * Execute an AI action
- * Validates mode and confirmation requirements before executing
+ * Validates mode, payload, and confirmation requirements before executing
  */
 export async function executeAction(
   request: AiActionRequest,
-  context: ExecutorContext
+  context: ExecutorContext,
+  handlers?: Partial<ActionHandlers>
 ): Promise<AiActionResult> {
   // Validate mode
   const modeValidation = validateModeForAction(request.type, context.currentMode)
@@ -61,6 +67,15 @@ export async function executeAction(
     return {
       success: false,
       error: modeValidation.error,
+    }
+  }
+
+  // Validate payload
+  const payloadValidation = validateActionPayload(request.type, request.payload)
+  if (!payloadValidation.success) {
+    return {
+      success: false,
+      error: `Invalid payload: ${payloadValidation.error.issues.map((i) => i.message).join(', ')}`,
     }
   }
 
@@ -73,10 +88,13 @@ export async function executeAction(
     }
   }
 
-  // Execute action (implementations in Phase 2)
+  // Route to handler
   try {
-    const result = await executeActionByType(request, context)
-    return result
+    const handler = handlers?.[request.type]
+    if (handler) {
+      return await handler(request, context)
+    }
+    return await executeActionByType(request)
   } catch (error) {
     return {
       success: false,
@@ -104,73 +122,8 @@ function getConfirmationMessage(request: AiActionRequest): string {
 }
 
 /**
- * Route action to specific handler
+ * Route action to specific handler (fallback stubs for unimplemented actions)
  */
-async function executeActionByType(
-  request: AiActionRequest,
-  _context: ExecutorContext
-): Promise<AiActionResult> {
-  // TODO: Implement action handlers in Phase 2
-  // Each action type will have its own handler function
-
-  switch (request.type) {
-    case AiActionType.FIND_CONTACTS:
-      // Will call searchProvider + parse results + populate staging
-      throw new Error('FIND_CONTACTS not implemented - Phase 2')
-
-    case AiActionType.SHOW_STAGED_RESULTS:
-      // Will return current staged results
-      throw new Error('SHOW_STAGED_RESULTS not implemented - Phase 2')
-
-    case AiActionType.DELETE_STAGED_ROW:
-      // Will remove a row from staging
-      throw new Error('DELETE_STAGED_ROW not implemented - Phase 2')
-
-    case AiActionType.APPROVE_STAGED_LIST:
-      // Will create Campaign + Contacts from staged list
-      throw new Error('APPROVE_STAGED_LIST not implemented - Phase 2')
-
-    case AiActionType.RUN_EMAIL_FINDING:
-      // Will start campaign runner in EMAIL_FINDING state
-      throw new Error('RUN_EMAIL_FINDING not implemented - Phase 2')
-
-    case AiActionType.RUN_INSERTS:
-      // Will start campaign runner in INSERTS state
-      throw new Error('RUN_INSERTS not implemented - Phase 2')
-
-    case AiActionType.RUN_DRAFTS:
-      // Will start campaign runner in DRAFTS state
-      throw new Error('RUN_DRAFTS not implemented - Phase 2')
-
-    case AiActionType.SEND_EMAILS:
-      // Will start campaign runner in SENDING state
-      throw new Error('SEND_EMAILS not implemented - Phase 2')
-
-    case AiActionType.QUERY_CONTACTS:
-      // Will query contacts with filters
-      throw new Error('QUERY_CONTACTS not implemented - Phase 2')
-
-    case AiActionType.MOVE_STAGE:
-      // Will update contact stage
-      throw new Error('MOVE_STAGE not implemented - Phase 2')
-
-    case AiActionType.UPDATE_FIELD:
-      // Will update single field on contact
-      throw new Error('UPDATE_FIELD not implemented - Phase 2')
-
-    case AiActionType.BULK_UPDATE:
-      // Will update multiple contacts
-      throw new Error('BULK_UPDATE not implemented - Phase 2')
-
-    case AiActionType.DELETE_CONTACTS:
-      // Will delete contacts
-      throw new Error('DELETE_CONTACTS not implemented - Phase 2')
-
-    case AiActionType.CREATE_SAVED_VIEW:
-      // Will create a saved view
-      throw new Error('CREATE_SAVED_VIEW not implemented - Phase 2')
-
-    default:
-      throw new Error(`Action type ${request.type} not implemented`)
-  }
+async function executeActionByType(request: AiActionRequest): Promise<AiActionResult> {
+  throw new Error(`${request.type} not implemented - Phase 2`)
 }

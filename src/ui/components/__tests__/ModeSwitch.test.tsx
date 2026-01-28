@@ -74,4 +74,43 @@ describe('ModeSwitch', () => {
 
     expect(screen.getByRole('radiogroup')).toBeInTheDocument()
   })
+
+  // New tests for Task 11: Color-coded modes
+  it('applies blue color styling for Contact Finder when selected', () => {
+    render(<ModeSwitch />)
+
+    const radiogroup = screen.getByRole('radiogroup')
+    const labels = radiogroup.querySelectorAll('label')
+    // Contact Finder is first and selected by default
+    expect(labels[0].className).toContain('bg-blue')
+  })
+
+  it('applies green color styling for General Manager when selected', () => {
+    render(<ModeSwitch value={AiMode.GENERAL_MANAGER} />)
+
+    const radiogroup = screen.getByRole('radiogroup')
+    const labels = radiogroup.querySelectorAll('label')
+    // General Manager is second
+    expect(labels[1].className).toContain('bg-green')
+  })
+
+  it('applies orange color styling for Assistant when selected', () => {
+    render(<ModeSwitch value={AiMode.ASSISTANT} />)
+
+    const radiogroup = screen.getByRole('radiogroup')
+    const labels = radiogroup.querySelectorAll('label')
+    // Assistant is third
+    expect(labels[2].className).toContain('bg-orange')
+  })
+
+  it('does not apply mode color to unselected modes', () => {
+    render(<ModeSwitch />)
+
+    const radiogroup = screen.getByRole('radiogroup')
+    const labels = radiogroup.querySelectorAll('label')
+    // General Manager (index 1) should NOT have green when not selected
+    expect(labels[1].className).not.toContain('bg-green')
+    // Assistant (index 2) should NOT have orange when not selected
+    expect(labels[2].className).not.toContain('bg-orange')
+  })
 })

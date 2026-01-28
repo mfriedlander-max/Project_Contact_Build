@@ -5,6 +5,23 @@ import { AiMode, AI_MODE_LABELS, type AiModeType } from '@/lib/types/enums'
 
 const MODE_STORAGE_KEY = 'aiMode'
 
+const MODE_COLORS: Record<AiModeType, { active: string; indicator: string }> = {
+  [AiMode.CONTACT_FINDER]: {
+    active: 'bg-blue-100 text-blue-900 shadow-sm',
+    indicator: 'bg-blue-500',
+  },
+  [AiMode.GENERAL_MANAGER]: {
+    active: 'bg-green-100 text-green-900 shadow-sm',
+    indicator: 'bg-green-500',
+  },
+  [AiMode.ASSISTANT]: {
+    active: 'bg-orange-100 text-orange-900 shadow-sm',
+    indicator: 'bg-orange-500',
+  },
+} as const
+
+const INACTIVE_STYLE = 'text-gray-600 hover:text-gray-900'
+
 interface ModeSwitchProps {
   value?: AiModeType
   onChange?: (mode: AiModeType) => void
@@ -40,8 +57,8 @@ export function ModeSwitch({ value, onChange }: ModeSwitchProps) {
           key={mode}
           className={`cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
             selectedMode === mode
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900'
+              ? MODE_COLORS[mode].active
+              : INACTIVE_STYLE
           }`}
         >
           <input

@@ -20,3 +20,8 @@ export {
   type EmailFindResult,
   type EmailFindOptions,
 } from './hunterService'
+export {
+  generateInsert,
+  type ContactInfo,
+  type InsertResult,
+} from './insertGenerator'
