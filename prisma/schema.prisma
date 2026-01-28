@@ -209,9 +209,20 @@ model crm_Contacts {
   draft_created_at       DateTime?           @db.Date
   sent_at                DateTime?           @db.Date
   connection_level       ConnectionLevel?    @default(NONE)
-  campaign               String?             // Campaign/batch grouping
+  campaign               String?             // Legacy campaign string field
   custom_fields          Json?               // User-defined columns
 
+  // New CRM Rebuild Fields (Phase 1)
+  campaignId             String?             @db.ObjectId
+  connection_stage       ConnectionStage?    @default(DRAFTED)
+
+  // Gmail integration fields
+  gmail_thread_id        String?             // Gmail thread ID for conversation tracking
+  gmail_message_id       String?             // Last Gmail message ID
+  gmail_draft_id         String?             // Draft ID if draft exists
+  gmail_last_sync        DateTime?           @db.Date
+
+  // Relations
   assigned_to_user       Users?              @relation(name: "assigned_contacts", fields: [assigned_to], references: [id])
   crate_by_user          Users?              @relation(name: "created_contacts", fields: [created_by], references: [id])
   opportunitiesIDs       String[]            @db.ObjectId
@@ -220,6 +231,12 @@ model crm_Contacts {
   assigned_accounts      crm_Accounts?       @relation(fields: [accountsIDs], references: [id])
   documentsIDs           String[]            @db.ObjectId
   assigned_documents     Documents[]         @relation(fields: [documentsIDs], references: [id])
+  assigned_campaign      Campaign?           @relation("CampaignContacts", fields: [campaignId], references: [id])
+
+  // Indexes for common queries
+  @@index([assigned_to, connection_stage])
+  @@index([campaignId])
+  @@index([assigned_to, email_status])
 }
 
 // Student Networking CRM - Enums
@@ -639,6 +656,15 @@ model Users {
   watching_boards      Boards[]              @relation(name: "watching_users", fields: [watching_boardsIDs], references: [id])
   watching_accountsIDs String[]              @db.ObjectId
   watching_accounts    crm_Accounts[]        @relation(name: "watching_accounts", fields: [watching_accountsIDs], references: [id])
+
+  // Student Networking CRM - New Relations (Phase 1)
+  campaigns            Campaign[]
+  templates            Template[]
+  savedViews           SavedView[]
+  customFields         CustomFieldDefinition[]
+  integrations         IntegrationConnection[]
+  stagedContacts       StagedContactList[]
+  settings             Settings?
 }
 
 enum Language {
@@ -698,4 +724,227 @@ model gpt_models {
 enum gptStatus {
   ACTIVE
   INACTIVE
+}
+
+// ============================================================================
+// Student Networking CRM - New Models (Phase 1)
+// ============================================================================
+
+// Connection stage for pipeline visualization
+enum ConnectionStage {
+  DRAFTED
+  MESSAGE_SENT
+  DIDNT_CONNECT
+  CONNECTED
+  IN_TOUCH
+}
+
+// Campaign run state machine
+enum CampaignRunState {
+  IDLE
+  EMAIL_FINDING_RUNNING
+  INSERTS_RUNNING
+  DRAFTS_RUNNING
+  SENDING_RUNNING
+  COMPLETE
+  FAILED
+}
+
+// Integration provider types
+enum IntegrationProvider {
+  GMAIL
+  HUNTER
+  SEARCH_PROVIDER
+  OUTLOOK
+}
+
+// Custom field types
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+}
+
+// Campaign status
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETE
+  ARCHIVED
+}
+
+// Campaign model - for organizing contact outreach campaigns
+model Campaign {
+  id          String         @id @default(auto()) @map("_id") @db.ObjectId
+  v           Int            @default(0) @map("__v")
+  userId      String         @db.ObjectId
+  name        String
+  description String?
+  status      CampaignStatus @default(DRAFT)
+  createdAt   DateTime       @default(now()) @db.Date
+  updatedAt   DateTime?      @updatedAt @db.Date
+
+  // Relations
+  user     Users         @relation(fields: [userId], references: [id])
+  contacts crm_Contacts[] @relation("CampaignContacts")
+  runs     CampaignRun[]
+  template Template?     @relation(fields: [templateId], references: [id])
+  templateId String?     @db.ObjectId
+
+  // Index for user queries
+  @@index([userId])
+}
+
+// CampaignRun model - tracks individual campaign execution runs
+model CampaignRun {
+  id               String           @id @default(auto()) @map("_id") @db.ObjectId
+  v                Int              @default(0) @map("__v")
+  campaignId       String           @db.ObjectId
+  state            CampaignRunState @default(IDLE)
+  startedAt        DateTime?        @db.Date
+  completedAt      DateTime?        @db.Date
+  emailsFindingTotal    Int         @default(0)
+  emailsFindingComplete Int         @default(0)
+  insertsTotal          Int         @default(0)
+  insertsComplete       Int         @default(0)
+  draftsTotal           Int         @default(0)
+  draftsComplete        Int         @default(0)
+  sendingTotal          Int         @default(0)
+  sendingComplete       Int         @default(0)
+  errorMessage     String?
+  createdAt        DateTime         @default(now()) @db.Date
+  updatedAt        DateTime?        @updatedAt @db.Date
+
+  // Relations
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+}
+
+// Settings model - user preferences and configuration
+model Settings {
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
+  v                     Int      @default(0) @map("__v")
+  userId                String   @unique @db.ObjectId
+  defaultAiMode         String?  @default("GENERAL_MANAGER")
+  hunterApiKey          String?  // Encrypted
+  defaultTemplateId     String?  @db.ObjectId
+  emailSignature        String?
+  autoSaveInterval      Int?     @default(30) // seconds
+  notificationsEnabled  Boolean  @default(true)
+  createdAt             DateTime @default(now()) @db.Date
+  updatedAt             DateTime? @updatedAt @db.Date
+
+  // Relations
+  user Users @relation(fields: [userId], references: [id])
+}
+
+// Template model - email templates for outreach
+model Template {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  v           Int       @default(0) @map("__v")
+  userId      String    @db.ObjectId
+  name        String
+  subject     String
+  body        String
+  isDefault   Boolean   @default(false)
+  createdAt   DateTime  @default(now()) @db.Date
+  updatedAt   DateTime? @updatedAt @db.Date
+
+  // Relations
+  user      Users      @relation(fields: [userId], references: [id])
+  campaigns Campaign[]
+
+  @@index([userId])
+}
+
+// SavedView model - saved filter/sort configurations for contacts table
+model SavedView {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  v           Int       @default(0) @map("__v")
+  userId      String    @db.ObjectId
+  name        String
+  filters     Json      // { field: value } filter configuration
+  sort        Json?     // { field: 'asc'|'desc' } sort configuration
+  columns     String[]  // Visible column IDs
+  isDefault   Boolean   @default(false)
+  createdAt   DateTime  @default(now()) @db.Date
+  updatedAt   DateTime? @updatedAt @db.Date
+
+  // Relations
+  user Users @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+// CustomFieldDefinition model - user-defined columns for contacts
+model CustomFieldDefinition {
+  id          String          @id @default(auto()) @map("_id") @db.ObjectId
+  v           Int             @default(0) @map("__v")
+  userId      String          @db.ObjectId
+  name        String
+  fieldKey    String          // Unique key for this field (e.g., "custom_industry")
+  fieldType   CustomFieldType @default(TEXT)
+  options     String[]        // For SELECT type, available options
+  isRequired  Boolean         @default(false)
+  order       Int             @default(0)
+  createdAt   DateTime        @default(now()) @db.Date
+  updatedAt   DateTime?       @updatedAt @db.Date
+
+  // Relations
+  user Users @relation(fields: [userId], references: [id])
+
+  @@unique([userId, fieldKey])
+  @@index([userId])
+}
+
+// IntegrationConnection model - OAuth tokens and API connections
+model IntegrationConnection {
+  id           String              @id @default(auto()) @map("_id") @db.ObjectId
+  v            Int                 @default(0) @map("__v")
+  userId       String              @db.ObjectId
+  provider     IntegrationProvider
+  accessToken  String?             // Encrypted
+  refreshToken String?             // Encrypted
+  expiresAt    DateTime?           @db.Date
+  scope        String?
+  isActive     Boolean             @default(true)
+  metadata     Json?               // Provider-specific data
+  createdAt    DateTime            @default(now()) @db.Date
+  updatedAt    DateTime?           @updatedAt @db.Date
+
+  // Relations
+  user Users @relation(fields: [userId], references: [id])
+
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+// StagedContactList model - temporary storage for AI-found contacts before approval
+model StagedContactList {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  v               Int       @default(0) @map("__v")
+  userId          String    @db.ObjectId
+  sessionId       String    // AI conversation session identifier
+  firstName       String?
+  lastName        String
+  company         String?
+  position        String?
+  email           String?
+  linkedinUrl     String?
+  sourceUrl       String?   // Where the contact was found
+  relevanceScore  Float?    // AI-assigned relevance score (0-1)
+  notes           String?   // AI reasoning for including this contact
+  isApproved      Boolean   @default(false)
+  isDeleted       Boolean   @default(false)
+  createdAt       DateTime  @default(now()) @db.Date
+  expiresAt       DateTime  @db.Date // Auto-cleanup after 24h
+
+  // Relations
+  user Users @relation(fields: [userId], references: [id])
+
+  @@index([userId, sessionId])
+  @@index([expiresAt])
 }

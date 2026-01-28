@@ -99,6 +99,7 @@
     "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/bcrypt": "^5.0.2",
@@ -111,6 +112,7 @@
     "@types/react-beautiful-dnd": "^13.1.8",
     "@types/react-dom": "npm:types-react-dom@19.0.0-rc.1",
     "@vitejs/plugin-react": "^5.1.2",
+    "@vitest/coverage-v8": "^4.0.18",
     "cypress": "^13.15.2",
     "jsdom": "^27.4.0",
     "prisma": "^5.22.0",
