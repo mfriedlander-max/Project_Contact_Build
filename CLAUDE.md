@@ -8,16 +8,17 @@
 
 1. [Architect Role](#architect-role)
 2. [Multi-Agent Orchestration](#multi-agent-orchestration)
-3. [Worker Agent Roles](#worker-agent-roles)
-4. [Status Documentation](#status-documentation)
-5. [Prompt Templates](#prompt-templates)
-6. [Core Workflow](#core-workflow)
-7. [Command Reference](#command-reference)
-8. [Workflow by Task Size](#workflow-by-task-size)
-9. [Situational Commands](#situational-commands)
-10. [Decision Trees](#decision-trees)
-11. [Escalation Procedures](#escalation-procedures)
-12. [Best Practices](#best-practices)
+3. [Git Branching & Worktree Strategy](#git-branching--worktree-strategy)
+4. [Worker Agent Roles](#worker-agent-roles)
+5. [Status Documentation](#status-documentation)
+6. [Prompt Templates](#prompt-templates)
+7. [Core Workflow](#core-workflow)
+8. [Command Reference](#command-reference)
+9. [Workflow by Task Size](#workflow-by-task-size)
+10. [Situational Commands](#situational-commands)
+11. [Decision Trees](#decision-trees)
+12. [Escalation Procedures](#escalation-procedures)
+13. [Best Practices](#best-practices)
 
 ---
 
@@ -157,6 +158,402 @@ Agent C starts (depends on B's output)
 
 ---
 
+## Git Branching & Worktree Strategy
+
+### Branch Structure (Simplified Feature Branches)
+
+```
+main (always deployable, protected)
+  │
+  └── feature/[name] (current work - all agents commit here)
+        │
+        └── experiment/[name] (only for risky/experimental work)
+```
+
+### Branch Naming Conventions
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| Feature | `feature/[short-description]` | `feature/user-auth` |
+| Bug fix | `fix/[issue-or-description]` | `fix/login-error` |
+| Experiment | `experiment/[description]` | `experiment/new-db-schema` |
+| Hotfix | `hotfix/[description]` | `hotfix/critical-security` |
+
+### When to Use What: Decision Matrix
+
+The Architect decides isolation level per-task based on risk:
+
+| Scenario | Isolation Level | Approach |
+|----------|-----------------|----------|
+| **Low Risk** - Independent files, clear ownership | File Ownership | Same branch, agents own different files |
+| **Medium Risk** - Some file overlap possible | Sequential | Agents work one at a time on shared files |
+| **High Risk** - Experimental, might fail/revert | Git Worktrees | Each agent gets isolated worktree |
+| **Critical** - Could break main if wrong | Worktree + Review | Isolated worktree, mandatory review before merge |
+
+### Decision Tree: Worktrees vs File Ownership
+
+```
+START: New multi-agent task
+  │
+  ├─ Can files be cleanly divided between agents?
+  │     YES → Use File Ownership (same branch)
+  │     NO  ↓
+  │
+  ├─ Is this experimental/might need to throw away?
+  │     YES → Use Git Worktrees (full isolation)
+  │     NO  ↓
+  │
+  ├─ Do agents need each other's output during work?
+  │     YES → Use Sequential Handoff
+  │     NO  → Use Git Worktrees
+```
+
+---
+
+### Worktree Lifecycle
+
+When the Architect decides to use worktrees, follow this lifecycle:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    WORKTREE LIFECYCLE                                │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   1. CREATE          2. WORK           3. MERGE         4. CLEANUP  │
+│   ─────────────────────────────────────────────────────────────────│
+│                                                                     │
+│   Architect          Agent works       Architect        Architect   │
+│   creates worktree   in isolation      coordinates      removes     │
+│   for agent          commits freely    merge to main    worktree    │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### Step 1: Create Worktree
+
+**Architect provides this to user (who runs it):**
+```bash
+# Create worktree for agent
+git worktree add ../worktree-[task-name] -b feature/[task-name]
+
+# Verify
+git worktree list
+```
+
+**Or use the skill:**
+```
+superpowers:using-git-worktrees
+```
+
+The skill will guide through worktree creation with proper naming and setup.
+
+#### Step 2: Agent Works in Worktree
+
+**Agent's prompt includes:**
+```markdown
+## Working Directory
+You are working in an ISOLATED WORKTREE: `../worktree-[task-name]/`
+
+All your work happens in this directory. You can commit freely without affecting other agents.
+
+## Git Commands in Worktree
+```bash
+cd ../worktree-[task-name]
+# Work normally - commits stay in this worktree's branch
+git add .
+git commit -m "feat: [description]"
+```
+```
+
+#### Step 3: Merge Worktree Back
+
+**Architect coordinates merge (asks user for approval):**
+
+```markdown
+## Merge Request: [Task Name]
+
+**Worktree**: `../worktree-[task-name]/`
+**Branch**: `feature/[task-name]`
+**Status**: Ready for merge
+
+### Changes Summary
+[List of files changed, features added]
+
+### Merge Strategy Options
+1. **Merge commit** - Preserves history (recommended for features)
+2. **Squash merge** - Clean single commit (for small changes)
+3. **Rebase** - Linear history (if no conflicts expected)
+
+### Recommended Command
+```bash
+git checkout main
+git merge feature/[task-name] --no-ff -m "feat: [description]"
+```
+
+**Awaiting your approval to proceed.**
+```
+
+**Or use the skill:**
+```
+superpowers:finishing-a-development-branch
+```
+
+The skill guides through merge options and cleanup.
+
+#### Step 4: Cleanup Worktree
+
+**After successful merge (Architect initiates, user confirms):**
+```bash
+# Remove the worktree
+git worktree remove ../worktree-[task-name]
+
+# Delete the feature branch (now merged)
+git branch -d feature/[task-name]
+
+# Verify cleanup
+git worktree list
+git branch -a
+```
+
+---
+
+### Sync Protocol
+
+When multiple agents work on the **same branch** (file ownership strategy):
+
+#### When to Sync
+
+| Event | Action |
+|-------|--------|
+| **Task Start** | Agent pulls latest: `git pull origin feature/[name]` |
+| **Before Marking Complete** | Agent pulls, resolves conflicts, then marks complete |
+| **After Dependency Completes** | Waiting agent pulls before starting |
+
+#### Sync Commands for Agents
+
+**In agent prompts, include:**
+```markdown
+## Sync Protocol
+
+**At Task Start:**
+```bash
+git pull origin feature/[branch-name]
+```
+
+**Before Marking Complete:**
+```bash
+git pull origin feature/[branch-name]
+# If conflicts, resolve them
+npm run build  # Verify build still passes
+git push origin feature/[branch-name]
+```
+```
+
+#### When Using Worktrees (No Sync Needed)
+
+Worktrees are isolated - agents don't need to sync during work. Only sync happens at merge time.
+
+---
+
+### Merge Coordination
+
+**Architect coordinates all merges. Flow:**
+
+```
+Agent marks complete
+       │
+       ▼
+Architect verifies in status doc
+       │
+       ▼
+Architect asks user: "Ready to merge [task]?"
+       │
+       ▼
+User approves
+       │
+       ▼
+Architect provides merge commands
+       │
+       ▼
+User executes (or Architect if permitted)
+       │
+       ▼
+Architect updates ORCHESTRATION.md
+```
+
+#### Merge Order (When Multiple Agents Complete)
+
+1. **Independent tasks** - Merge in any order (no conflicts expected)
+2. **Dependent tasks** - Merge in dependency order
+3. **Conflicting files** - Merge one, have other agent rebase, then merge
+
+**Architect communicates order:**
+```markdown
+## Merge Queue
+
+Ready to merge in this order:
+1. task-001 (TDD) - No dependencies
+2. task-002 (API) - No dependencies
+3. task-003 (Review) - Depends on 1, 2
+
+Please merge task-001 first:
+```bash
+git merge feature/task-001 --no-ff
+```
+
+Then I'll provide task-002 merge instructions.
+```
+
+---
+
+### Cleanup Process
+
+After a feature is fully merged to main:
+
+#### Cleanup Checklist (Architect Initiates)
+
+```markdown
+## Cleanup: [Feature Name]
+
+Feature merged to main. Ready for cleanup?
+
+### Branches to Delete
+- [ ] `feature/[name]` - merged, safe to delete
+- [ ] `experiment/[name]` - if any
+
+### Worktrees to Remove
+- [ ] `../worktree-[name]/` - if used
+
+### Status Docs to Archive
+- [ ] Move `/status/task-*.md` to `/status/archive/[YYYY-MM]/`
+
+### Commands
+```bash
+# Delete merged branches
+git branch -d feature/[name]
+git push origin --delete feature/[name]
+
+# Remove worktrees (if any)
+git worktree remove ../worktree-[name]
+
+# Archive status docs
+mkdir -p status/archive/$(date +%Y-%m)
+mv status/task-*.md status/archive/$(date +%Y-%m)/
+```
+
+**Awaiting your approval to clean up.**
+```
+
+#### Archive Structure
+
+```
+/status/
+├── ORCHESTRATION.md       # Always current
+├── BLOCKERS.md            # Always current
+├── archive/
+│   ├── 2026-01/
+│   │   ├── task-001-feature.md
+│   │   ├── task-002-tests.md
+│   │   └── task-003-review.md
+│   └── 2026-02/
+│       └── ...
+```
+
+---
+
+### Skills Integration
+
+#### `superpowers:using-git-worktrees`
+
+**When Architect Uses It:**
+- Starting a high-risk or experimental task
+- Need complete isolation for an agent
+- Multiple agents might touch same files
+
+**What It Does:**
+- Guides through worktree creation
+- Sets up proper branch naming
+- Verifies worktree is ready
+
+**Architect's Prompt to Agent (Worktree Setup):**
+```markdown
+## Worktree Setup
+
+Run this skill to set up your isolated workspace:
+```
+superpowers:using-git-worktrees
+```
+
+Follow the prompts. Your worktree will be at: `../worktree-[task-name]/`
+```
+
+#### `superpowers:finishing-a-development-branch`
+
+**When Architect Uses It:**
+- Agent has completed their work
+- Ready to merge back to main (or feature branch)
+- Need to decide: merge directly, create PR, or cleanup
+
+**What It Does:**
+- Presents merge options (merge, squash, rebase)
+- Guides through PR creation if needed
+- Handles branch cleanup
+
+**Architect's Merge Coordination:**
+```markdown
+## Ready to Finish: [Task Name]
+
+The agent has completed their work. Running:
+```
+superpowers:finishing-a-development-branch
+```
+
+This will present options for:
+1. Merge directly to main
+2. Create a PR for review
+3. Squash commits first
+4. Cleanup and delete branch
+
+**What would you like to do?**
+```
+
+---
+
+### Quick Reference: Git Commands
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                    GIT QUICK REFERENCE                              │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│   CREATE FEATURE BRANCH                                            │
+│   git checkout -b feature/[name]                                   │
+│                                                                    │
+│   CREATE WORKTREE                                                  │
+│   git worktree add ../worktree-[name] -b feature/[name]           │
+│                                                                    │
+│   LIST WORKTREES                                                   │
+│   git worktree list                                                │
+│                                                                    │
+│   SYNC (on same branch)                                            │
+│   git pull origin feature/[name]                                   │
+│                                                                    │
+│   MERGE TO MAIN                                                    │
+│   git checkout main                                                │
+│   git merge feature/[name] --no-ff -m "feat: [desc]"              │
+│                                                                    │
+│   CLEANUP WORKTREE                                                 │
+│   git worktree remove ../worktree-[name]                          │
+│   git branch -d feature/[name]                                     │
+│                                                                    │
+│   CLEANUP REMOTE                                                   │
+│   git push origin --delete feature/[name]                         │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Worker Agent Roles
 
 ### Available Roles
@@ -234,10 +631,15 @@ Agent C starts (depends on B's output)
 ```
 /status/
 ├── ORCHESTRATION.md      # Master status (architect maintains)
-├── task-001-feature.md   # Individual task status
+├── BLOCKERS.md           # Current blockers needing resolution
+├── task-001-feature.md   # Individual task status (active)
 ├── task-002-tests.md
 ├── task-003-review.md
-└── BLOCKERS.md           # Current blockers needing resolution
+└── archive/              # Completed tasks (organized by month)
+    ├── 2026-01/
+    │   └── task-xxx-*.md
+    └── 2026-02/
+        └── task-xxx-*.md
 ```
 
 ### Master Orchestration Doc (Architect Maintains)
