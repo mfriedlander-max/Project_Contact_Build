@@ -15,10 +15,9 @@
 7. [Core Workflow](#core-workflow)
 8. [Command Reference](#command-reference)
 9. [Workflow by Task Size](#workflow-by-task-size)
-10. [Situational Commands](#situational-commands)
-11. [Decision Trees](#decision-trees)
-12. [Escalation Procedures](#escalation-procedures)
-13. [Best Practices](#best-practices)
+10. [Escalation Procedures](#escalation-procedures)
+11. [Best Practices](#best-practices)
+12. [Context Management](#context-management)
 
 ---
 
@@ -597,6 +596,12 @@ This will present options for:
 │   CLEANUP REMOTE                                                   │
 │   git push origin --delete feature/[name]                         │
 │                                                                    │
+│   ERROR RECOVERY                                                   │
+│   git revert <commit-hash>              # Undo specific commit     │
+│   git reset --soft HEAD~1               # Undo last commit (keep)  │
+│   git reset --hard HEAD~1               # Undo last commit (discard)│
+│   git checkout -- <file>                # Discard file changes     │
+│                                                                    │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -626,7 +631,12 @@ This will present options for:
 │ • Implement to pass tests      │ • Modify files outside scope      │
 │ • Refactor for quality         │ • Skip the RED-GREEN cycle        │
 │ • Update status doc            │ • Add features not in spec        │
+│                                │ • Skip code review (REQUIRED)     │
 └─────────────────────────────────────────────────────────────────────┘
+
+**IMPORTANT**: TDD agents write tests AND implementation, but their work
+MUST still be reviewed by a Code Review agent before merge. TDD does not
+replace the review step - it ensures testable code goes INTO review.
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    IMPLEMENTATION AGENT                              │
@@ -1202,7 +1212,7 @@ Agent 4 (Impl-UI) ────────┘
 │   TDD Agent         → /tdd                     → Tests first       │
 │   Implementation    → (standard)               → Write code        │
 │   Code Review       → /code-review             → Review quality    │
-│   Debug             → superpowers:debugging    → Fix bugs          │
+│   Debug             → superpowers:systematic-debugging → Fix bugs  │
 │   Build Fix         → /build-fix               → Fix build errors  │
 │                                                                    │
 ├────────────────────────────────────────────────────────────────────┤
@@ -1236,6 +1246,40 @@ Agent 4 (Impl-UI) ────────┘
 
 ---
 
+## Context Management
+
+### Preventing Context Loss
+
+Agents working on complex tasks should use the `strategic-compact` skill at logical breakpoints to preserve context through task phases.
+
+**When to Use `strategic-compact`:**
+- After completing a major phase of work
+- Before starting a complex sub-task
+- When context window is getting full (agent notices slower responses)
+
+### Recovering from Context Loss
+
+If an agent loses context mid-task:
+
+1. **Read the status doc** - Contains progress log and handoff notes
+2. **Check git history** - `git log --oneline -10` shows recent work
+3. **Resume from last checkpoint** - Status doc shows where to continue
+
+**Agent prompt addition for complex tasks:**
+```markdown
+## Context Recovery
+If you lose context, read your status doc at `/status/task-[XXX].md`
+to see what was completed and resume from the last logged step.
+```
+
+### Built-in Protections
+
+- **Claude Code auto-summarization** - Conversations have unlimited context through automatic summarization
+- **Status docs** - Provide persistent state across context boundaries
+- **Git commits** - Each completed step should be committed for recovery
+
+---
+
 ## Project-Specific Information
 
 ### Tech Stack
@@ -1261,4 +1305,4 @@ npm run dev            # Dev server
 
 ---
 
-*Last updated: January 2026*
+*Last updated: January 28, 2026*
