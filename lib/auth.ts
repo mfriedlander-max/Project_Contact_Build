@@ -4,7 +4,6 @@ import GoogleProvider from "next-auth/providers/google";
 import GitHubProvider from "next-auth/providers/github";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
-import { newUserNotify } from "./new-user-notify";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 
 function getGoogleCredentials(): { clientId: string; clientSecret: string } {
@@ -128,8 +127,6 @@ export const authOptions: NextAuthOptions = {
                   : "PENDING",
             },
           });
-
-          await newUserNotify(newUser);
 
           //Put new created user data in session
           session.user.id = newUser.id;

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { prismadb } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import sendEmail from "@/lib/sendmail";
 import { z } from "zod";
 import type { ConnectionLevel } from "@prisma/client";
 
@@ -111,31 +110,6 @@ export async function POST(req: Request) {
         connection_level: validatedConnectionLevel,
       },
     });
-
-    if (assigned_to !== userId) {
-      const notifyRecipient = await prismadb.users.findFirst({
-        where: {
-          id: assigned_to,
-        },
-      });
-
-      if (!notifyRecipient) {
-        return new NextResponse("No user found", { status: 400 });
-      }
-
-      await sendEmail({
-        from: process.env.EMAIL_FROM as string,
-        to: notifyRecipient.email || "info@softbase.cz",
-        subject:
-          notifyRecipient.userLanguage === "en"
-            ? `New contact ${first_name} ${last_name} has been added to the system and assigned to you.`
-            : `Nový kontakt ${first_name} ${last_name} byla přidána do systému a přidělena vám.`,
-        text:
-          notifyRecipient.userLanguage === "en"
-            ? `New contact ${first_name} ${last_name} has been added to the system and assigned to you. You can click here for detail: ${process.env.NEXT_PUBLIC_APP_URL}/crm/contacts/${newContact.id}`
-            : `Nový kontakt ${first_name} ${last_name} byla přidán do systému a přidělena vám. Detaily naleznete zde: ${process.env.NEXT_PUBLIC_APP_URL}/crm/contact/${newContact.id}`,
-      });
-    }
 
     return NextResponse.json({ newContact }, { status: 200 });
   } catch (error) {
