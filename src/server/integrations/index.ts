@@ -25,3 +25,27 @@ export {
   type ContactInfo,
   type InsertResult,
 } from './insertGenerator'
+
+// Pipeline stage executors
+export {
+  executeEmailFindingStage,
+  type EmailFindingStageResult,
+} from './stages/emailFindingStage'
+export {
+  executeInsertStage,
+  type InsertStageResult,
+} from './stages/insertStage'
+export {
+  executeDraftStage,
+  type DraftStageResult,
+} from './stages/draftStage'
+export type { TemplateInput } from './stages/draftStage'
+export {
+  executeSendStage,
+  type SendStageResult,
+} from './stages/sendStage'
+export {
+  checkForReplies,
+  type ReplyCheckResult,
+} from './stages/gmailSync'
+export type { StageError, ProgressCallback } from './stages/types'
