@@ -160,28 +160,19 @@ export function createCampaignRunner(deps: CampaignRunnerDeps) {
 }
 
 /**
- * Default campaign runner (uses stubs - replaced with real deps in Phase 3)
+ * Default campaign runner with Prisma-backed store
  */
-export const campaignRunner = {
-  isRunning: async (_userId: string): Promise<boolean> => {
-    throw new Error('Not implemented - Phase 2: use createCampaignRunner with deps')
-  },
-  getStatus: async (_campaignId: string): Promise<CampaignRunProgress | null> => {
-    throw new Error('Not implemented - Phase 2: use createCampaignRunner with deps')
-  },
-  startEmailFinding: async (_userId: string, _campaignId: string): Promise<CampaignRunProgress> => {
-    throw new Error('Not implemented - Phase 2: use createCampaignRunner with deps')
-  },
-  startInserts: async (_userId: string, _campaignId: string): Promise<CampaignRunProgress> => {
-    throw new Error('Not implemented - Phase 2: use createCampaignRunner with deps')
-  },
-  startDrafts: async (_userId: string, _campaignId: string, _templateId: string): Promise<CampaignRunProgress> => {
-    throw new Error('Not implemented - Phase 2: use createCampaignRunner with deps')
-  },
-  startSending: async (_userId: string, _campaignId: string): Promise<CampaignRunProgress> => {
-    throw new Error('Not implemented - Phase 2: use createCampaignRunner with deps')
-  },
-  canTransition: (from: CampaignRunStateType, to: CampaignRunStateType): boolean => {
-    return VALID_TRANSITIONS[from].includes(to)
+import { prismadb } from '@/lib/prisma'
+import { createPrismaCampaignRunStore } from '@/src/server/services/campaignRunStore'
+
+const defaultStore = createPrismaCampaignRunStore(prismadb)
+const defaultCampaignService = {
+  getContactCount: async (campaignId: string) => {
+    return prismadb.crm_Contacts.count({ where: { campaignId } })
   },
 }
+
+export const campaignRunner = createCampaignRunner({
+  store: defaultStore,
+  campaignService: defaultCampaignService,
+})

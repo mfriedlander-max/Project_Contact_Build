@@ -1,46 +1,47 @@
 'use client'
 
-import { useState } from 'react'
-import { ModeSwitch } from '@/src/ui/components/ModeSwitch'
+import { useCallback } from 'react'
 import { ChatPanel } from '@/src/ui/components/chat/ChatPanel'
-import { ChatProvider } from '@/src/ui/components/chat/ChatContext'
+import { ChatProvider, useChatContext } from '@/src/ui/components/chat/ChatContext'
 import { StagingPanel } from '@/src/ui/components/staging/StagingPanel'
-import type { StagedContact } from '@/src/ui/components/staging/types'
-import type { AiModeType } from '@/lib/types/enums'
+import { useChatApi } from '@/src/ui/hooks/useChatApi'
+import { AiMode, type AiModeType } from '@/lib/types/enums'
 
-export default function HomePage() {
-  const [mode, setMode] = useState<AiModeType | undefined>(undefined)
-  const [stagedContacts, setStagedContacts] = useState<StagedContact[]>([])
-  const [stagingQuery, setStagingQuery] = useState('')
+function HomeContent() {
+  const { addAssistantMessage, setLoading } = useChatContext()
+  const {
+    stagedContacts,
+    stagingQuery,
+    sendMessage,
+    approveStaged,
+    deleteStagedRow,
+    clearStaging,
+  } = useChatApi()
 
-  const handleModeChange = (newMode: AiModeType) => {
-    setMode(newMode)
-  }
+  const handleSendMessage = useCallback(async (content: string) => {
+    setLoading(true)
+    try {
+      const storedMode = localStorage.getItem('aiMode')
+      const mode: AiModeType = (storedMode && Object.values(AiMode).includes(storedMode as AiModeType))
+        ? (storedMode as AiModeType)
+        : AiMode.CONTACT_FINDER
 
-  const handleApprove = (_contactIds: string[]) => {
-    setStagedContacts([])
-    setStagingQuery('')
-  }
+      const response = await sendMessage(content, mode)
+      addAssistantMessage(response.reply, response.actions)
+    } finally {
+      setLoading(false)
+    }
+  }, [sendMessage, addAssistantMessage, setLoading])
 
-  const handleClearStaging = () => {
-    setStagedContacts([])
-    setStagingQuery('')
-  }
-
-  const handleDeleteStagedRow = (id: string) => {
-    setStagedContacts((prev) => prev.filter((c) => c.id !== id))
-  }
+  const handleApprove = useCallback(async (contactIds: string[]) => {
+    await approveStaged('New Campaign', contactIds)
+  }, [approveStaged])
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-gray-200 px-4 py-3">
-        <ModeSwitch onChange={handleModeChange} />
-      </div>
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1">
-          <ChatProvider>
-            <ChatPanel />
-          </ChatProvider>
+          <ChatPanel />
         </div>
         {stagedContacts.length > 0 && (
           <div className="w-96 border-l border-gray-200 p-4">
@@ -48,12 +49,20 @@ export default function HomePage() {
               contacts={stagedContacts}
               query={stagingQuery}
               onApprove={handleApprove}
-              onClear={handleClearStaging}
-              onDeleteRow={handleDeleteStagedRow}
+              onClear={clearStaging}
+              onDeleteRow={deleteStagedRow}
             />
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+export default function HomePage() {
+  return (
+    <ChatProvider onSendMessage={undefined}>
+      <HomeContent />
+    </ChatProvider>
   )
 }

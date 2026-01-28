@@ -4,7 +4,9 @@ export {
   executeAction,
   validateModeForAction,
   requiresConfirmation,
+  createExecutor,
   type ExecutorContext,
+  type ExecutorDeps,
   type ActionHandler,
   type ActionHandlers,
 } from './executor'
@@ -25,5 +27,29 @@ export type {
   StagedContact,
   FindContactsContext,
 } from './handlers/findContacts'
+export { handleShowStagedResults } from './handlers/showStagedResults'
+export { handleDeleteStagedRow } from './handlers/deleteStagedRow'
+export { handleApproveStagedList } from './handlers/approveStagedList'
+export { handleRunCampaignStage } from './handlers/runCampaignStage'
+export { handleQueryContacts } from './handlers/queryContacts'
+export {
+  handleMoveStage,
+  handleUpdateField,
+  handleBulkUpdate,
+  handleDeleteContacts,
+} from './handlers/mutationHandlers'
+export { handleCreateSavedView } from './handlers/createSavedView'
 export { createActionLogger } from './actionLogger'
 export type { ActionLogEntry, ActionStats } from './actionLogger'
+export type {
+  StagingServiceDeps,
+  ApproveServiceDeps,
+  ContactServiceDeps,
+  SavedViewServiceDeps,
+  StageExecutors,
+  Contact,
+  ContactFilters,
+  Campaign,
+  SavedView,
+  StageResult,
+} from './handlers/interfaces'

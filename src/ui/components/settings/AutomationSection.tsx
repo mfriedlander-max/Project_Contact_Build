@@ -1,26 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface AutomationToggleProps {
   label: string
   description: string
-  defaultEnabled?: boolean
-  onChange?: (enabled: boolean) => void
+  enabled: boolean
+  onChange: (enabled: boolean) => void
 }
 
 function AutomationToggle({
   label,
   description,
-  defaultEnabled = false,
+  enabled,
   onChange,
 }: AutomationToggleProps) {
-  const [enabled, setEnabled] = useState(defaultEnabled)
-
   const handleToggle = () => {
-    const newValue = !enabled
-    setEnabled(newValue)
-    onChange?.(newValue)
+    onChange(!enabled)
   }
 
   return (
@@ -47,18 +43,42 @@ function AutomationToggle({
   )
 }
 
+interface AutomationSectionProps {
+  settings?: { [key: string]: unknown } | null
+  onToggle?: (key: string, enabled: boolean) => void
+}
+
 const automations = [
   {
+    key: 'autoSendDrafts',
     label: 'Auto-send drafts',
     description: 'Automatically send approved drafts at scheduled times',
   },
   {
+    key: 'followUpReminders',
     label: 'Follow-up reminders',
     description: 'Get notified when contacts need follow-up',
   },
 ]
 
-export function AutomationSection() {
+export function AutomationSection({ settings, onToggle }: AutomationSectionProps) {
+  const [toggleStates, setToggleStates] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    if (settings) {
+      const states: Record<string, boolean> = {}
+      for (const automation of automations) {
+        states[automation.key] = Boolean(settings[automation.key])
+      }
+      setToggleStates(states)
+    }
+  }, [settings])
+
+  const handleChange = (key: string, enabled: boolean) => {
+    setToggleStates((prev) => ({ ...prev, [key]: enabled }))
+    onToggle?.(key, enabled)
+  }
+
   return (
     <section aria-label="Automation" role="region" className="space-y-4">
       <div>
@@ -69,9 +89,11 @@ export function AutomationSection() {
       <div className="space-y-3">
         {automations.map((automation) => (
           <AutomationToggle
-            key={automation.label}
+            key={automation.key}
             label={automation.label}
             description={automation.description}
+            enabled={toggleStates[automation.key] ?? false}
+            onChange={(enabled) => handleChange(automation.key, enabled)}
           />
         ))}
       </div>
