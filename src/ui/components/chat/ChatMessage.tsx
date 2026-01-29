@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactElement } from 'react'
 import type { ChatMessage as ChatMessageType } from './ChatContext'
 
 interface ChatMessageProps {
@@ -7,7 +8,7 @@ interface ChatMessageProps {
   onAction?: (actionId: string) => void
 }
 
-function renderMarkdown(text: string): JSX.Element {
+function renderMarkdown(text: string): ReactElement {
   // Simple bold markdown: **text** -> <strong>text</strong>
   const parts = text.split(/(\*\*[^*]+\*\*)/g)
   return (

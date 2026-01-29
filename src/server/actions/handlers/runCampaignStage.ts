@@ -39,15 +39,15 @@ const STAGE_ACTION_MAP: Record<string, {
 }> = {
   [AiActionType.RUN_EMAIL_FINDING]: {
     runningState: CampaignRunState.EMAIL_FINDING_RUNNING,
-    completedState: CampaignRunState.EMAIL_FINDING_COMPLETE,
+    completedState: CampaignRunState.INSERTS_RUNNING,
   },
   [AiActionType.RUN_INSERTS]: {
     runningState: CampaignRunState.INSERTS_RUNNING,
-    completedState: CampaignRunState.INSERTS_COMPLETE,
+    completedState: CampaignRunState.DRAFTS_RUNNING,
   },
   [AiActionType.RUN_DRAFTS]: {
     runningState: CampaignRunState.DRAFTS_RUNNING,
-    completedState: CampaignRunState.DRAFTS_COMPLETE,
+    completedState: CampaignRunState.SENDING_RUNNING,
   },
   [AiActionType.SEND_EMAILS]: {
     runningState: CampaignRunState.SENDING_RUNNING,
@@ -61,20 +61,27 @@ export async function handleRunCampaignStage(
   context: { userId: string },
   deps: RunCampaignStageDeps
 ): Promise<AiActionResult<CampaignRunProgress>> {
-  const schema = actionType === AiActionType.RUN_DRAFTS
-    ? RunDraftsPayloadSchema
-    : CampaignIdPayloadSchema
-
-  const parsed = schema.safeParse(payload)
-  if (!parsed.success) {
+  const isDrafts = actionType === AiActionType.RUN_DRAFTS
+  const baseResult = CampaignIdPayloadSchema.safeParse(payload)
+  if (!baseResult.success) {
     return {
       success: false,
-      error: `Invalid payload: ${parsed.error.issues.map((i) => i.message).join(', ')}`,
+      error: `Invalid payload: ${baseResult.error.issues.map((i) => i.message).join(', ')}`,
     }
   }
 
-  const { campaignId } = parsed.data
-  const templateId = 'templateId' in parsed.data ? parsed.data.templateId : undefined
+  const { campaignId } = baseResult.data
+  let templateId: string | undefined
+  if (isDrafts) {
+    const draftsResult = RunDraftsPayloadSchema.safeParse(payload)
+    if (!draftsResult.success) {
+      return {
+        success: false,
+        error: `Invalid payload: ${draftsResult.error.issues.map((i) => i.message).join(', ')}`,
+      }
+    }
+    templateId = draftsResult.data.templateId
+  }
   const stageConfig = STAGE_ACTION_MAP[actionType]
 
   if (!stageConfig) {
@@ -83,19 +90,18 @@ export async function handleRunCampaignStage(
 
   try {
     // Start the stage via campaign runner
-    let progress: CampaignRunProgress
     switch (actionType) {
       case AiActionType.RUN_EMAIL_FINDING:
-        progress = await deps.campaignRunner.startEmailFinding(context.userId, campaignId)
+        await deps.campaignRunner.startEmailFinding(context.userId, campaignId)
         break
       case AiActionType.RUN_INSERTS:
-        progress = await deps.campaignRunner.startInserts(context.userId, campaignId)
+        await deps.campaignRunner.startInserts(context.userId, campaignId)
         break
       case AiActionType.RUN_DRAFTS:
-        progress = await deps.campaignRunner.startDrafts(context.userId, campaignId, templateId!)
+        await deps.campaignRunner.startDrafts(context.userId, campaignId, templateId!)
         break
       case AiActionType.SEND_EMAILS:
-        progress = await deps.campaignRunner.startSending(context.userId, campaignId)
+        await deps.campaignRunner.startSending(context.userId, campaignId)
         break
       default:
         return { success: false, error: `Unhandled action type: ${actionType}` }
