@@ -1,6 +1,7 @@
 /**
  * AI Chat API Route
  * Bridge between the chat UI and the action executor system
+ * Supports streaming responses via SSE for chat messages
  */
 
 import { NextResponse } from 'next/server'
@@ -10,6 +11,9 @@ import { z } from 'zod'
 import { AiMode, type AiModeType } from '@/lib/types/enums'
 import { executeAction, type ExecutorContext } from '@/src/server/actions/executor'
 import type { AiActionRequest, AiActionResult } from '@/src/server/actions/types'
+import { anthropicHelper } from '@/lib/anthropic'
+import { rateLimiters, getClientIdentifier } from '@/lib/rate-limit'
+import { buildSystemPrompt, buildChatMessages } from '@/lib/ai/stream-chat'
 
 const chatRequestSchema = z.object({
   message: z.string().min(1).max(2000),
@@ -19,6 +23,10 @@ const chatRequestSchema = z.object({
     payload: z.unknown(),
     userConfirmed: z.boolean().optional(),
   }).optional(),
+  history: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string(),
+  })).optional(),
 })
 
 export async function POST(req: Request) {
@@ -39,7 +47,7 @@ export async function POST(req: Request) {
       )
     }
 
-    const { message, mode, action } = validation.data
+    const { message, mode, action, history } = validation.data
 
     const context: ExecutorContext = {
       userId,
@@ -65,15 +73,67 @@ export async function POST(req: Request) {
       })
     }
 
-    // No action provided — return the message for the AI to process client-side
-    // The actual LLM call happens on the client via streaming;
-    // this route only handles action execution
-    return NextResponse.json({
-      success: true,
-      data: {
-        reply: `Message received in ${mode} mode. No action specified.`,
-        message,
-        mode,
+    // No action — stream an AI response via SSE
+    const identifier = getClientIdentifier(req, userId)
+    const rateLimitResult = rateLimiters.aiOperations(identifier)
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { success: false, error: 'Rate limit exceeded. Please try again later.' },
+        { status: 429 }
+      )
+    }
+
+    const client = await anthropicHelper(userId)
+    if (!client) {
+      return NextResponse.json(
+        { success: false, error: 'AI service is not configured.' },
+        { status: 503 }
+      )
+    }
+
+    const systemPrompt = buildSystemPrompt(mode as AiModeType)
+    const messages = buildChatMessages(message, history)
+
+    const stream = client.messages.stream({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: messages.map(m => ({ role: m.role, content: m.content })),
+    })
+
+    const readableStream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder()
+        try {
+          for await (const event of stream) {
+            if (
+              event.type === 'content_block_delta' &&
+              event.delta.type === 'text_delta'
+            ) {
+              const data = JSON.stringify({ type: 'text', text: event.delta.text })
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+            }
+          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+          controller.close()
+        } catch (error) {
+          const errorData = JSON.stringify({
+            type: 'error',
+            error: error instanceof Error ? error.message : 'Stream failed',
+          })
+          controller.enqueue(encoder.encode(`data: ${errorData}\n\n`))
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+          controller.close()
+        }
+      },
+    })
+
+    return new Response(readableStream, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
       },
     })
   } catch (error) {
