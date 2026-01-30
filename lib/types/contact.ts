@@ -3,6 +3,8 @@
  * Defines the workflow-specific types for contact management
  */
 
+import type { ConnectionStageType } from '@/lib/types/enums'
+
 // Enums matching Prisma schema
 export const EmailConfidence = {
   HIGH: 'HIGH',
@@ -108,6 +110,7 @@ export interface Contact {
   draft_created_at?: Date
   sent_at?: Date
   connection_level?: ConnectionLevelType
+  connection_stage?: ConnectionStageType
   campaign?: string
   custom_fields?: ContactCustomFields
 

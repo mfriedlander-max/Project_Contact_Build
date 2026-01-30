@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ContactGrid } from '../ContactGrid'
+import { ConnectionStage } from '@/lib/types/enums'
 import type { Contact } from '@/lib/types/contact'
 
 const contacts: Contact[] = [
@@ -17,6 +18,7 @@ const contacts: Contact[] = [
     email_confidence: 'HIGH',
     personalized_insert: 'Met at conference',
     campaign: 'Q1 Outreach',
+    connection_stage: ConnectionStage.CONNECTED,
   },
   {
     id: 'c2',
@@ -24,6 +26,7 @@ const contacts: Contact[] = [
     company: 'Globex',
     email: 'smith@globex.com',
     email_status: 'DRAFTED',
+    connection_stage: ConnectionStage.DRAFTED,
   },
 ]
 
@@ -81,6 +84,47 @@ describe('ContactGrid', () => {
   it('shows empty state when contacts is empty', () => {
     render(<ContactGrid {...defaultProps} contacts={[]} />)
     expect(screen.getByText('No contacts found')).toBeInTheDocument()
+  })
+
+  it('renders stage dropdowns with all 5 stage options', () => {
+    render(<ContactGrid {...defaultProps} />)
+    const selects = screen.getAllByRole('combobox')
+    expect(selects.length).toBe(2)
+    const options = selects[0].querySelectorAll('option')
+    expect(options.length).toBe(5)
+  })
+
+  it('calls onStageChange when selecting a forward stage', async () => {
+    const onStageChange = vi.fn()
+    render(<ContactGrid {...defaultProps} onStageChange={onStageChange} />)
+    const selects = screen.getAllByRole('combobox')
+    // c1 is CONNECTED (index 3), selecting IN_TOUCH (index 4) is forward
+    await userEvent.selectOptions(selects[0], ConnectionStage.IN_TOUCH)
+    expect(onStageChange).toHaveBeenCalledWith('c1', ConnectionStage.IN_TOUCH)
+  })
+
+  it('shows confirm dialog when selecting a backward stage', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const onStageChange = vi.fn()
+    render(<ContactGrid {...defaultProps} onStageChange={onStageChange} />)
+    const selects = screen.getAllByRole('combobox')
+    // c1 is CONNECTED (index 3), selecting DRAFTED (index 0) is backward
+    await userEvent.selectOptions(selects[0], ConnectionStage.DRAFTED)
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(onStageChange).toHaveBeenCalledWith('c1', ConnectionStage.DRAFTED)
+    confirmSpy.mockRestore()
+  })
+
+  it('does not call onStageChange when backward move is cancelled', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const onStageChange = vi.fn()
+    render(<ContactGrid {...defaultProps} onStageChange={onStageChange} />)
+    const selects = screen.getAllByRole('combobox')
+    // c1 is CONNECTED (index 3), selecting DRAFTED (index 0) is backward
+    await userEvent.selectOptions(selects[0], ConnectionStage.DRAFTED)
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(onStageChange).not.toHaveBeenCalled()
+    confirmSpy.mockRestore()
   })
 
   it('only shows visible columns and hides non-visible optional ones', () => {

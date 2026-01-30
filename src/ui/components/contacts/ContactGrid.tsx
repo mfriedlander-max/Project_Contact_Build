@@ -2,6 +2,7 @@
 
 import type { Contact } from '@/lib/types/contact'
 import type { ConnectionStageType } from '@/lib/types/enums'
+import { StageBadge } from './StageBadge'
 
 const COLUMNS = [
   { key: 'name', label: 'Name', fixed: true },
@@ -59,6 +60,7 @@ export function ContactGrid({
   sortColumn,
   sortOrder,
   onSort,
+  onStageChange,
   isLoading,
 }: ContactGridProps) {
   const columns = getVisibleColumns(visibleColumns)
@@ -98,7 +100,15 @@ export function ContactGrid({
                   key={col.key}
                   className="whitespace-nowrap px-4 py-3 text-sm text-gray-900"
                 >
-                  {getCellValue(contact, col.key)}
+                  {col.key === 'connection_stage' && contact.connection_stage ? (
+                    <StageBadge
+                      stage={contact.connection_stage}
+                      editable={true}
+                      onStageChange={(newStage) => onStageChange(contact.id, newStage)}
+                    />
+                  ) : (
+                    getCellValue(contact, col.key)
+                  )}
                 </td>
               ))}
             </tr>
