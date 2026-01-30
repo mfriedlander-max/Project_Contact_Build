@@ -1,9 +1,26 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, act } from '@testing-library/react'
 import { UndoToast } from '../UndoToast'
+import { useToast } from '@/src/ui/hooks/useToast'
+
+vi.mock('@/src/ui/hooks/useToast', () => ({
+  useToast: vi.fn(),
+}))
+
+const mockUndo = vi.fn()
+const mockUseToast = useToast as ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   vi.useFakeTimers()
+  mockUndo.mockReset()
+  mockUseToast.mockReturnValue({
+    toasts: [],
+    addToast: vi.fn(),
+    removeToast: vi.fn(),
+    success: vi.fn(),
+    error: vi.fn(),
+    undo: mockUndo,
+  })
 })
 
 afterEach(() => {
@@ -11,24 +28,21 @@ afterEach(() => {
 })
 
 describe('UndoToast', () => {
-  it('renders the message text', () => {
-    render(<UndoToast message="Contact deleted" onUndo={vi.fn()} onDismiss={vi.fn()} />)
-    expect(screen.getByText('Contact deleted')).toBeInTheDocument()
-  })
-
-  it('renders an undo button', () => {
-    render(<UndoToast message="Deleted" onUndo={vi.fn()} onDismiss={vi.fn()} />)
-    expect(screen.getByRole('button', { name: /undo/i })).toBeInTheDocument()
-  })
-
-  it('calls onUndo when undo button is clicked', () => {
+  it('calls useToast().undo on mount with message and onUndo', () => {
     const onUndo = vi.fn()
-    render(<UndoToast message="Deleted" onUndo={onUndo} onDismiss={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button', { name: /undo/i }))
-    expect(onUndo).toHaveBeenCalledOnce()
+    render(<UndoToast message="Contact deleted" onUndo={onUndo} onDismiss={vi.fn()} />)
+    expect(mockUndo).toHaveBeenCalledOnce()
+    expect(mockUndo).toHaveBeenCalledWith('Contact deleted', onUndo, 5000)
   })
 
-  it('auto-dismisses after 5 seconds', () => {
+  it('renders null (no visible DOM output)', () => {
+    const { container } = render(
+      <UndoToast message="Deleted" onUndo={vi.fn()} onDismiss={vi.fn()} />
+    )
+    expect(container.innerHTML).toBe('')
+  })
+
+  it('calls onDismiss after 5 seconds', () => {
     const onDismiss = vi.fn()
     render(<UndoToast message="Deleted" onUndo={vi.fn()} onDismiss={onDismiss} />)
 
@@ -39,7 +53,7 @@ describe('UndoToast', () => {
     expect(onDismiss).toHaveBeenCalledOnce()
   })
 
-  it('does not auto-dismiss before 5 seconds', () => {
+  it('does not call onDismiss before 5 seconds', () => {
     const onDismiss = vi.fn()
     render(<UndoToast message="Deleted" onUndo={vi.fn()} onDismiss={onDismiss} />)
 
@@ -50,12 +64,7 @@ describe('UndoToast', () => {
     expect(onDismiss).not.toHaveBeenCalled()
   })
 
-  it('renders a progress bar element', () => {
-    render(<UndoToast message="Deleted" onUndo={vi.fn()} onDismiss={vi.fn()} />)
-    expect(screen.getByRole('progressbar')).toBeInTheDocument()
-  })
-
-  it('calls onDismiss (not onUndo) when auto-dismissed', () => {
+  it('does not call onUndo on auto-dismiss', () => {
     const onUndo = vi.fn()
     const onDismiss = vi.fn()
     render(<UndoToast message="Deleted" onUndo={onUndo} onDismiss={onDismiss} />)
@@ -66,5 +75,20 @@ describe('UndoToast', () => {
 
     expect(onDismiss).toHaveBeenCalledOnce()
     expect(onUndo).not.toHaveBeenCalled()
+  })
+
+  it('cleans up dismiss timer on unmount', () => {
+    const onDismiss = vi.fn()
+    const { unmount } = render(
+      <UndoToast message="Deleted" onUndo={vi.fn()} onDismiss={onDismiss} />
+    )
+
+    unmount()
+
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+
+    expect(onDismiss).not.toHaveBeenCalled()
   })
 })

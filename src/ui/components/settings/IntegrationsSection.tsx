@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { IntegrationProvider, type IntegrationProviderType } from '@/lib/types/enums'
 
 interface IntegrationCardProps {
@@ -54,6 +54,13 @@ function HunterApiKeyInput({ onSave, onTestKey, isConnected }: HunterApiKeyInput
   const [apiKey, setApiKey] = useState('')
   const [showInput, setShowInput] = useState(false)
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'valid' | 'invalid'>('idle')
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
 
   const handleTest = async () => {
     if (!apiKey.trim() && !isConnected) return
@@ -64,7 +71,8 @@ function HunterApiKeyInput({ onSave, onTestKey, isConnected }: HunterApiKeyInput
     } catch {
       setTestStatus('invalid')
     }
-    setTimeout(() => setTestStatus('idle'), 3000)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => setTestStatus('idle'), 3000)
   }
 
   if (isConnected && !showInput) {
