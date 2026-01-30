@@ -18,7 +18,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
-import { GET, PUT } from '../route'
+import { GET, PUT, PATCH } from '../route'
 import { getServerSession } from 'next-auth'
 import { prismadb } from '@/lib/prisma'
 
@@ -146,6 +146,87 @@ describe('Settings API', () => {
 
       expect(response.status).toBe(200)
       expect(data.settings.emailSignature).toBe('Cheers')
+    })
+  })
+
+  describe('PATCH /api/settings', () => {
+    it('should return 401 when user is not authenticated', async () => {
+      vi.mocked(getServerSession).mockResolvedValue(null)
+
+      const request = createRequest('PATCH', { autoRunEmailFinding: true })
+      const response = await PATCH(request)
+
+      expect(response.status).toBe(401)
+    })
+
+    it('should successfully update automation fields', async () => {
+      vi.mocked(getServerSession).mockResolvedValue(mockSession)
+      vi.mocked(prismadb.settings.upsert).mockResolvedValue({
+        ...mockSettings,
+        autoRunEmailFinding: true,
+        autoRunInserts: false,
+        autoRunDrafts: true,
+        didntConnectEnabled: false,
+        didntConnectDays: 14,
+        availabilityBlock: null,
+      })
+
+      const request = createRequest('PATCH', {
+        autoRunEmailFinding: true,
+        autoRunDrafts: true,
+      })
+      const response = await PATCH(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.settings.autoRunEmailFinding).toBe(true)
+      expect(data.settings.autoRunDrafts).toBe(true)
+      expect(prismadb.settings.upsert).toHaveBeenCalledWith({
+        where: { userId: 'user-123' },
+        update: { autoRunEmailFinding: true, autoRunDrafts: true },
+        create: expect.objectContaining({
+          userId: 'user-123',
+          autoRunEmailFinding: true,
+          autoRunDrafts: true,
+        }),
+      })
+    })
+
+    it('should validate didntConnectDays is a positive integer', async () => {
+      vi.mocked(getServerSession).mockResolvedValue(mockSession)
+
+      const request = createRequest('PATCH', { didntConnectDays: -5 })
+      const response = await PATCH(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.error).toBeDefined()
+    })
+
+    it('should return updated settings after partial update', async () => {
+      vi.mocked(getServerSession).mockResolvedValue(mockSession)
+      vi.mocked(prismadb.settings.upsert).mockResolvedValue({
+        ...mockSettings,
+        availabilityBlock: 'weekdays-9-5',
+        autoRunEmailFinding: false,
+        autoRunInserts: false,
+        autoRunDrafts: false,
+        didntConnectEnabled: true,
+        didntConnectDays: 7,
+      })
+
+      const request = createRequest('PATCH', {
+        availabilityBlock: 'weekdays-9-5',
+        didntConnectEnabled: true,
+        didntConnectDays: 7,
+      })
+      const response = await PATCH(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(200)
+      expect(data.settings.availabilityBlock).toBe('weekdays-9-5')
+      expect(data.settings.didntConnectEnabled).toBe(true)
+      expect(data.settings.didntConnectDays).toBe(7)
     })
   })
 })

@@ -834,6 +834,12 @@ model Settings {
   emailSignature        String?
   autoSaveInterval      Int?     @default(30) // seconds
   notificationsEnabled  Boolean  @default(true)
+  availabilityBlock     String?
+  autoRunEmailFinding   Boolean  @default(false)
+  autoRunInserts        Boolean  @default(false)
+  autoRunDrafts         Boolean  @default(false)
+  didntConnectEnabled   Boolean  @default(false)
+  didntConnectDays      Int?     @default(14)
   createdAt             DateTime @default(now()) @db.Date
   updatedAt             DateTime? @updatedAt @db.Date
 

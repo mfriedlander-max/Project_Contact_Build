@@ -1,20 +1,34 @@
 # Orchestration Status
 
 ## Current Sprint
-**Goal**: UI Rebuild - AI-first Student Networking CRM
-**Started**: 2026-01-28
-**Target**: Complete Phase 0-3 (Full UI + Integrations)
-**Branch**: `ui-rebuild`
-**Tag**: `pre-ui-rebuild` (rollback point)
+**Goal**: Parallel feature build — Settings (gap fill), Sheets Grid, Upload Contacts, Error Handling UX
+**Started**: 2026-01-30
+**Strategy**: File ownership (no worktrees), all on main branch
 
 ## Active Agents
 
-| Agent | Role | Task | Status | Files | Last Update |
-|-------|------|------|--------|-------|-------------|
-| Window 2 | Agent A (UI) | Phase 3: Integration | 🟢 Complete | `app/(app)/*`, `src/ui/*` | 45 tests, 14 files |
-| Window 3 | Agent B (Data) | Phase 3: Integration | 🟢 Complete | `prisma/*`, `app/api/*`, `src/lib/*` | Campaign run routes, CampaignRunStore, AI chat API |
-| Window 4 | Agent C (Integrations) | Phase 3: Integration | 🟢 Complete | `src/server/integrations/*` | Pipeline stage executors + Gmail sync |
-| Window 5 | Agent D (AI/Orchestration) | Phase 3: Integration | 🟢 Complete | `src/server/actions/*` | All 14 handlers, createExecutor factory |
+| Window | Feature | Status | Plan | Last Update |
+|--------|---------|--------|------|-------------|
+| 1 | Settings Page (gap fill) | 🟡 In Progress | `docs/plans/2026-01-30-settings-page.md` | Filling 7 gaps in existing implementation |
+| 2 | Sheets Grid | 🟡 In Progress | `docs/plans/2026-01-30-sheets-grid.md` | Self-corrected paths, skipping done work |
+| 3 | Upload Contacts | 🟡 In Progress | `docs/plans/2026-01-30-upload-contacts.md` | Started |
+| 4 | Error Handling UX | 🟡 In Progress | `docs/plans/2026-01-30-error-handling-ux.md` | Started |
+
+## File Ownership (Current Sprint)
+
+| Window | Owned Files |
+|--------|-------------|
+| 1 | `app/(app)/settings/*`, `app/api/settings/*`, `app/api/templates/*`, `app/api/integrations/*`, `src/ui/components/settings/*`, `src/ui/hooks/useSettings.ts`, `src/ui/hooks/useTemplates.ts`, `src/ui/hooks/useIntegrations.ts` |
+| 2 | `app/(app)/sheets/*`, `app/api/crm/contacts/*`, `app/api/saved-views/*`, `app/api/custom-fields/*`, `src/ui/components/contacts/*`, `src/ui/hooks/useContacts.ts`, `src/ui/hooks/useSavedViews.ts` |
+| 3 | `src/ui/components/upload/*`, `src/server/services/uploadParser.ts`, `app/api/contacts/upload/*` |
+| 4 | `src/ui/components/toast/*`, `src/ui/components/error/*`, `src/ui/hooks/useToast.ts`, `src/ui/components/UndoToast.tsx`, `app/(app)/layout.tsx` |
+
+## Notes
+- Window 1: Settings was partially built in UI rebuild. Agent filling specific gaps (PATCH route, optimistic updates, template editing, availability block, tabbed nav).
+- Window 2: Plan had wrong API paths. Agent self-corrected to `app/api/crm/contacts/`. Saved views CRUD already existed — skipped.
+
+## Blockers
+- [ ] None currently
 
 ## Phase 3 Results (COMPLETE)
 
