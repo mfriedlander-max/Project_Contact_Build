@@ -112,6 +112,32 @@ describe('useToast', () => {
     })
   })
 
+  describe('timer cleanup on manual removal', () => {
+    it('clears the auto-dismiss timer when toast is manually removed', () => {
+      const { result } = renderHook(() => useToast(), { wrapper: createWrapper() })
+
+      let id: string
+      act(() => {
+        id = result.current.addToast({ type: 'info', message: 'Manual remove', duration: 3000 })
+      })
+
+      expect(result.current.toasts).toHaveLength(1)
+
+      act(() => {
+        result.current.removeToast(id!)
+      })
+
+      expect(result.current.toasts).toHaveLength(0)
+
+      // Fast-forward past the original duration — should stay at 0
+      act(() => {
+        vi.advanceTimersByTime(5000)
+      })
+
+      expect(result.current.toasts).toHaveLength(0)
+    })
+  })
+
   describe('convenience methods', () => {
     it('success() adds a success toast', () => {
       const { result } = renderHook(() => useToast(), { wrapper: createWrapper() })
@@ -137,6 +163,22 @@ describe('useToast', () => {
       expect(toast.type).toBe('error')
       expect(toast.message).toBe('Failed')
       expect(toast.action).toEqual({ label: 'Retry', onClick: retry })
+    })
+
+    it('error() action onClick invokes the retry callback', () => {
+      const { result } = renderHook(() => useToast(), { wrapper: createWrapper() })
+      const retryFn = vi.fn()
+
+      act(() => {
+        result.current.error('Failed', retryFn)
+      })
+
+      const toast = result.current.toasts[0]
+      expect(toast.action).toBeDefined()
+
+      toast.action!.onClick()
+
+      expect(retryFn).toHaveBeenCalledOnce()
     })
 
     it('error() works without retry', () => {

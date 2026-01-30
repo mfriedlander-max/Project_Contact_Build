@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useCallback, useRef, useState } from 'react'
+import { createContext, useContext, useCallback, useRef, useState, useEffect } from 'react'
 import React from 'react'
 
 const DEFAULT_DURATION = 5000
@@ -25,15 +25,16 @@ export interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null)
 
-let nextId = 0
-function generateId(): string {
-  nextId += 1
-  return `toast-${nextId}`
-}
-
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const nextIdRef = useRef(0)
+
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach((timer) => clearTimeout(timer))
+    }
+  }, [])
 
   const removeToast = useCallback((id: string) => {
     const timer = timersRef.current.get(id)
@@ -46,7 +47,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const addToast = useCallback(
     (toast: Omit<Toast, 'id'>): string => {
-      const id = generateId()
+      nextIdRef.current += 1
+      const id = `toast-${nextIdRef.current}`
       const duration = toast.duration ?? DEFAULT_DURATION
       const newToast: Toast = { ...toast, id, duration }
 
