@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import type { Contact } from '@/lib/types/contact'
+import type { ConnectionStageType } from '@/lib/types/enums'
 
 interface UseContactsOptions {
   stage?: string
@@ -71,7 +72,7 @@ export function useContacts({
     }
   }, [stage, campaignId, search, sort, order, page, limit, filters])
 
-  const updateContactStage = useCallback(async (id: string, newStage: string) => {
+  const updateContactStage = useCallback(async (id: string, newStage: ConnectionStageType) => {
     const previousContacts = contacts
 
     setContacts(

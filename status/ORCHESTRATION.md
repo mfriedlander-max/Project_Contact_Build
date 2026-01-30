@@ -9,10 +9,10 @@
 
 | Window | Feature | Status | Plan | Last Update |
 |--------|---------|--------|------|-------------|
-| 1 | Settings Page (gap fill) | 🟡 In Progress | `docs/plans/2026-01-30-settings-page.md` | Filling 7 gaps in existing implementation |
-| 2 | Sheets Grid | 🟡 In Progress | `docs/plans/2026-01-30-sheets-grid.md` | Self-corrected paths, skipping done work |
+| 1 | Settings Page (gap fill) | 🟢 Complete | `docs/plans/2026-01-30-settings-page.md` | 88 tests, 7 gaps filled (PATCH, optimistic updates, templates UI, automation, tabs) |
+| 2 | Sheets Grid | 🟢 Complete | `docs/plans/2026-01-30-sheets-grid.md` | 923 tests total, 10 tasks (grid, sort, filter, stage moves, saved views, column selector) |
 | 3 | Upload Contacts | 🟢 Complete | `docs/plans/2026-01-30-upload-contacts.md` | 53 tests, 6 tasks done (parser, API, ColumnMapper, UploadPreview, UploadDialog) |
-| 4 | Error Handling UX | 🟡 In Progress | `docs/plans/2026-01-30-error-handling-ux.md` | Started |
+| 4 | Error Handling UX | 🟢 Complete | `docs/plans/2026-01-30-error-handling-ux.md` | 7 tasks done (Toast, ErrorBoundary, RetryButton, UndoToast refactor, layout wiring) |
 
 ## File Ownership (Current Sprint)
 

@@ -49,7 +49,7 @@ function getCellValue(contact: Contact, columnKey: string): string {
     return first ? `${first} ${last}` : last
   }
 
-  const value = (contact as Record<string, unknown>)[columnKey]
+  const value = (contact as unknown as Record<string, unknown>)[columnKey]
   if (value == null) return ''
   return String(value)
 }

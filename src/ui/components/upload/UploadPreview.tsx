@@ -1,6 +1,6 @@
 'use client'
 
-import type { ContactCreateInput, ValidationError } from '@/server/services/uploadParser'
+import type { ContactCreateInput, ValidationError } from '@/src/server/services/uploadParser'
 
 interface UploadPreviewProps {
   contacts: ContactCreateInput[]

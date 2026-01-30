@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { UploadPreview } from '../UploadPreview'
-import type { ContactCreateInput, ValidationError } from '@/server/services/uploadParser'
+import type { ContactCreateInput, ValidationError } from '@/src/server/services/uploadParser'
 
 function makeContact(overrides: Partial<ContactCreateInput> = {}): ContactCreateInput {
   return {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { ColumnMapping } from '@/server/services/uploadParser'
+import type { ColumnMapping } from '@/src/server/services/uploadParser'
 
 interface ColumnMapperProps {
   headers: string[]
