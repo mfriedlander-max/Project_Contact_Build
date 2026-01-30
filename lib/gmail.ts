@@ -165,3 +165,90 @@ export async function validateGmailAccess(accessToken: string): Promise<boolean>
     return false
   }
 }
+
+// --- Draft Creation ---
+
+export interface DraftParams {
+  to: string
+  subject: string
+  body: string
+  threadId?: string
+}
+
+export interface DraftResult {
+  draftId: string
+  messageId: string
+  threadId: string
+}
+
+const gmailDraftResponseSchema = z.object({
+  id: z.string(),
+  message: z.object({
+    id: z.string(),
+    threadId: z.string(),
+  }),
+})
+
+function encodeEmail(params: DraftParams): string {
+  const lines = [
+    `To: ${params.to}`,
+    `Subject: ${params.subject}`,
+    'Content-Type: text/plain; charset=utf-8',
+    '',
+    params.body,
+  ]
+  const raw = lines.join('\r\n')
+  return Buffer.from(raw).toString('base64url')
+}
+
+export async function createDraft(
+  accessToken: string,
+  params: DraftParams
+): Promise<DraftResult> {
+  const url = `${GMAIL_API_BASE_URL}/users/me/drafts`
+
+  const requestBody: Record<string, unknown> = {
+    message: {
+      raw: encodeEmail(params),
+    },
+  }
+
+  if (params.threadId) {
+    requestBody.message = {
+      ...(requestBody.message as Record<string, unknown>),
+      threadId: params.threadId,
+    }
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  })
+
+  if (response.status === 429) {
+    throw createRateLimitError('Gmail API rate limit exceeded. Please try again later.')
+  }
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    const errorMessage = errorData.error?.message || `HTTP ${response.status}`
+    throw new Error(`Gmail API error: ${errorMessage}`)
+  }
+
+  const data = await response.json()
+  const parsed = gmailDraftResponseSchema.safeParse(data)
+
+  if (!parsed.success) {
+    throw new Error('Invalid draft response from Gmail API')
+  }
+
+  return {
+    draftId: parsed.data.id,
+    messageId: parsed.data.message.id,
+    threadId: parsed.data.message.threadId,
+  }
+}
