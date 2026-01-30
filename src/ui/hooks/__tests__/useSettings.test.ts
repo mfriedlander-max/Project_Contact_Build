@@ -61,6 +61,72 @@ describe('useSettings', () => {
     expect(result.current.settings?.defaultAiMode).toBe('CONTACT_FINDER')
   })
 
+  it('optimistically updates before server responds', async () => {
+    const initial = { defaultAiMode: 'GENERAL_MANAGER', notificationsEnabled: true }
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ settings: initial }),
+    })
+
+    const { result } = renderHook(() => useSettings())
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    // Create a deferred promise so we control when the PUT resolves
+    let resolvePut!: (value: unknown) => void
+    mockFetch.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePut = resolve
+      })
+    )
+
+    // Start update but don't await — check optimistic state immediately
+    act(() => {
+      result.current.updateSettings({ defaultAiMode: 'CONTACT_FINDER' })
+    })
+
+    // Settings should be optimistically updated before server responds
+    expect(result.current.settings).toEqual({
+      ...initial,
+      defaultAiMode: 'CONTACT_FINDER',
+    })
+
+    // Now resolve the server response
+    await act(async () => {
+      resolvePut({
+        ok: true,
+        json: async () => ({ settings: { ...initial, defaultAiMode: 'CONTACT_FINDER' } }),
+      })
+    })
+
+    expect(result.current.settings?.defaultAiMode).toBe('CONTACT_FINDER')
+  })
+
+  it('rolls back on server error', async () => {
+    const initial = { defaultAiMode: 'GENERAL_MANAGER', notificationsEnabled: true }
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ settings: initial }),
+    })
+
+    const { result } = renderHook(() => useSettings())
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    // Server returns error
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500 })
+
+    await act(async () => {
+      await result.current.updateSettings({ defaultAiMode: 'CONTACT_FINDER' })
+    })
+
+    // Should rollback to original settings
+    expect(result.current.settings).toEqual(initial)
+    expect(result.current.error).toBe('Failed to update settings')
+  })
+
   it('handles fetch error gracefully', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 500 })
 

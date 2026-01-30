@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 interface Settings {
   defaultAiMode?: string
@@ -9,6 +9,12 @@ interface Settings {
   emailSignature?: string | null
   autoSaveInterval?: number
   notificationsEnabled?: boolean
+  availabilityBlock?: string | null
+  autoRunEmailFinding?: boolean
+  autoRunInserts?: boolean
+  autoRunDrafts?: boolean
+  didntConnectEnabled?: boolean
+  didntConnectDays?: number
   [key: string]: unknown
 }
 
@@ -16,6 +22,8 @@ export function useSettings() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -38,6 +46,10 @@ export function useSettings() {
   }, [])
 
   const updateSettings = useCallback(async (updates: Partial<Settings>) => {
+    const previousSettings = settingsRef.current
+    setSettings((prev) => (prev ? { ...prev, ...updates } : { ...updates }))
+    setError(null)
+
     try {
       const res = await fetch('/api/settings', {
         method: 'PUT',
@@ -46,6 +58,7 @@ export function useSettings() {
       })
 
       if (!res.ok) {
+        setSettings(previousSettings)
         setError('Failed to update settings')
         return
       }
@@ -53,6 +66,7 @@ export function useSettings() {
       const data = await res.json()
       setSettings(data.settings)
     } catch {
+      setSettings(previousSettings)
       setError('Failed to update settings')
     }
   }, [])

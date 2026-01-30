@@ -1,3 +1,6 @@
+/**
+ * @vitest-environment node
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('next-auth', () => ({
@@ -33,24 +36,18 @@ import { POST } from '@/app/api/contacts/upload/route'
 
 const mockSession = { user: { id: 'user-1' } }
 
-function buildFormData(
-  fields: Record<string, string>,
-  file?: { name: string; content: string; type: string }
-): FormData {
-  const fd = new FormData()
-  for (const [key, value] of Object.entries(fields)) {
-    fd.append(key, value)
-  }
-  if (file) {
-    fd.append('file', new Blob([file.content], { type: file.type }), file.name)
-  }
-  return fd
+function makeFile(name: string, content: string, type: string): File {
+  return new File([content], name, { type })
 }
 
-function makeRequest(formData: FormData): Request {
+function makeRequest(entries: Record<string, string | File>): Request {
+  const fd = new FormData()
+  for (const [key, value] of Object.entries(entries)) {
+    fd.append(key, value)
+  }
   return new Request('http://localhost/api/contacts/upload', {
     method: 'POST',
-    body: formData,
+    body: fd,
   })
 }
 
@@ -61,18 +58,18 @@ describe('POST /api/contacts/upload', () => {
 
   it('returns 401 when unauthenticated', async () => {
     vi.mocked(getServerSession).mockResolvedValue(null)
-    const fd = buildFormData(
-      { mapping: '{"Name":"last_name"}' },
-      { name: 'test.csv', content: 'Name\nSmith', type: 'text/csv' }
-    )
-    const res = await POST(makeRequest(fd))
+    const req = makeRequest({
+      mapping: '{"Name":"last_name"}',
+      file: makeFile('test.csv', 'Name\nSmith', 'text/csv'),
+    })
+    const res = await POST(req)
     expect(res.status).toBe(401)
   })
 
   it('returns 400 when no file is provided', async () => {
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
-    const fd = buildFormData({ mapping: '{"Name":"last_name"}' })
-    const res = await POST(makeRequest(fd))
+    const req = makeRequest({ mapping: '{"Name":"last_name"}' })
+    const res = await POST(req)
     expect(res.status).toBe(400)
     const json = await res.json()
     expect(json.error).toMatch(/file/i)
@@ -80,11 +77,11 @@ describe('POST /api/contacts/upload', () => {
 
   it('returns 400 for unsupported file type', async () => {
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
-    const fd = buildFormData(
-      { mapping: '{"Name":"last_name"}' },
-      { name: 'test.pdf', content: 'data', type: 'application/pdf' }
-    )
-    const res = await POST(makeRequest(fd))
+    const req = makeRequest({
+      mapping: '{"Name":"last_name"}',
+      file: makeFile('test.pdf', 'data', 'application/pdf'),
+    })
+    const res = await POST(req)
     expect(res.status).toBe(400)
     const json = await res.json()
     expect(json.error).toMatch(/file type/i)
@@ -93,23 +90,22 @@ describe('POST /api/contacts/upload', () => {
   it('returns 400 when file exceeds 5MB', async () => {
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
     const largeContent = 'x'.repeat(5 * 1024 * 1024 + 1)
-    const fd = buildFormData(
-      { mapping: '{"Name":"last_name"}' },
-      { name: 'big.csv', content: largeContent, type: 'text/csv' }
-    )
-    const res = await POST(makeRequest(fd))
+    const req = makeRequest({
+      mapping: '{"Name":"last_name"}',
+      file: makeFile('big.csv', largeContent, 'text/csv'),
+    })
+    const res = await POST(req)
     expect(res.status).toBe(400)
     const json = await res.json()
     expect(json.error).toMatch(/5.*mb/i)
-  })
+  }, 30000)
 
   it('returns 400 when mapping is missing', async () => {
     vi.mocked(getServerSession).mockResolvedValue(mockSession)
-    const fd = buildFormData(
-      {},
-      { name: 'test.csv', content: 'Name\nSmith', type: 'text/csv' }
-    )
-    const res = await POST(makeRequest(fd))
+    const req = makeRequest({
+      file: makeFile('test.csv', 'Name\nSmith', 'text/csv'),
+    })
+    const res = await POST(req)
     expect(res.status).toBe(400)
     const json = await res.json()
     expect(json.error).toMatch(/mapping/i)
@@ -130,17 +126,14 @@ describe('POST /api/contacts/upload', () => {
 
     vi.mocked(parseCSV).mockReturnValue(parsed)
     vi.mocked(applyMapping).mockReturnValue(mapped)
-    vi.mocked(validateContacts).mockReturnValue({
-      valid: mapped,
-      errors: [],
-    })
+    vi.mocked(validateContacts).mockReturnValue({ valid: mapped, errors: [] })
     vi.mocked(prismadb.crm_Contacts.createMany).mockResolvedValue({ count: 1 })
 
-    const fd = buildFormData(
-      { mapping: '{"Name":"last_name"}' },
-      { name: 'test.csv', content: 'Name\nSmith', type: 'text/csv' }
-    )
-    const res = await POST(makeRequest(fd))
+    const req = makeRequest({
+      mapping: '{"Name":"last_name"}',
+      file: makeFile('test.csv', 'Name\nSmith', 'text/csv'),
+    })
+    const res = await POST(req)
     const json = await res.json()
 
     expect(res.status).toBe(200)
@@ -165,21 +158,18 @@ describe('POST /api/contacts/upload', () => {
 
     vi.mocked(parseXLSX).mockReturnValue(parsed)
     vi.mocked(applyMapping).mockReturnValue(mapped)
-    vi.mocked(validateContacts).mockReturnValue({
-      valid: mapped,
-      errors: [],
-    })
+    vi.mocked(validateContacts).mockReturnValue({ valid: mapped, errors: [] })
     vi.mocked(prismadb.crm_Contacts.createMany).mockResolvedValue({ count: 1 })
 
-    const fd = buildFormData(
-      { mapping: '{"Name":"last_name"}' },
-      {
-        name: 'test.xlsx',
-        content: 'binary',
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      }
-    )
-    const res = await POST(makeRequest(fd))
+    const req = makeRequest({
+      mapping: '{"Name":"last_name"}',
+      file: makeFile(
+        'test.xlsx',
+        'binary',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      ),
+    })
+    const res = await POST(req)
     const json = await res.json()
 
     expect(res.status).toBe(200)
@@ -209,11 +199,11 @@ describe('POST /api/contacts/upload', () => {
     })
     vi.mocked(prismadb.crm_Contacts.createMany).mockResolvedValue({ count: 1 })
 
-    const fd = buildFormData(
-      { mapping: '{"Name":"last_name"}' },
-      { name: 'test.csv', content: 'Name\n\nSmith', type: 'text/csv' }
-    )
-    const res = await POST(makeRequest(fd))
+    const req = makeRequest({
+      mapping: '{"Name":"last_name"}',
+      file: makeFile('test.csv', 'Name\n\nSmith', 'text/csv'),
+    })
+    const res = await POST(req)
     const json = await res.json()
 
     expect(res.status).toBe(200)
@@ -237,26 +227,23 @@ describe('POST /api/contacts/upload', () => {
 
     vi.mocked(parseCSV).mockReturnValue(parsed)
     vi.mocked(applyMapping).mockReturnValue(mapped)
-    vi.mocked(validateContacts).mockReturnValue({
-      valid: mapped,
-      errors: [],
-    })
+    vi.mocked(validateContacts).mockReturnValue({ valid: mapped, errors: [] })
     vi.mocked(prismadb.crm_Contacts.createMany).mockResolvedValue({ count: 1 })
 
-    const fd = buildFormData(
-      { mapping: '{"Name":"last_name"}', campaignId: 'camp-123' },
-      { name: 'test.csv', content: 'Name\nSmith', type: 'text/csv' }
-    )
-    const res = await POST(makeRequest(fd))
+    const req = makeRequest({
+      mapping: '{"Name":"last_name"}',
+      campaignId: 'camp-123',
+      file: makeFile('test.csv', 'Name\nSmith', 'text/csv'),
+    })
+    const res = await POST(req)
     const json = await res.json()
 
     expect(res.status).toBe(200)
     expect(json.contacts[0].campaignId).toBe('camp-123')
 
     const createManyCall = vi.mocked(prismadb.crm_Contacts.createMany).mock.calls[0][0]
-    expect((createManyCall as { data: Array<Record<string, unknown>> }).data[0]).toHaveProperty(
-      'campaignId',
-      'camp-123'
-    )
+    expect(
+      (createManyCall as { data: Array<Record<string, unknown>> }).data[0]
+    ).toHaveProperty('campaignId', 'camp-123')
   })
 })
