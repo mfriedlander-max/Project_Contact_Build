@@ -1,24 +1,34 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import LoginPage from '../login/page'
 
+vi.mock('next-auth/react', () => ({
+  signIn: vi.fn(),
+}))
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => ({ get: vi.fn().mockReturnValue(null) }),
+}))
+
 describe('LoginPage', () => {
-  it('renders login page with heading', () => {
+  it('renders login page with sign in heading', () => {
     render(<LoginPage />)
 
-    expect(screen.getByRole('heading', { name: /login/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument()
   })
 
-  it('renders authentication coming soon message', () => {
+  it('renders email and password inputs', () => {
     render(<LoginPage />)
 
-    expect(screen.getByText(/authentication coming soon/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
   })
 
-  it('centers content on screen', () => {
+  it('renders OAuth buttons', () => {
     render(<LoginPage />)
 
-    const container = screen.getByRole('heading', { name: /login/i }).closest('div')
-    expect(container).toHaveClass('text-center')
+    expect(screen.getByRole('button', { name: /google/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /github/i })).toBeInTheDocument()
   })
 })

@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   CampaignRunState,
   VALID_TRANSITIONS,
   campaignRunner,
+  createCampaignRunner,
   type CampaignRunProgress,
+  type CampaignRunStore,
 } from '../campaignRunner'
 
 describe('Campaign Runner', () => {
@@ -156,47 +158,114 @@ describe('Campaign Runner', () => {
     })
   })
 
-  describe('campaignRunner.isRunning (stub)', () => {
-    it('should throw not implemented error', async () => {
-      await expect(campaignRunner.isRunning('user-123')).rejects.toThrow('Not implemented')
+  describe('campaignRunner.isRunning', () => {
+    it('should return true when store has active non-terminal run', async () => {
+      const store: CampaignRunStore = {
+        getActiveRun: vi.fn().mockResolvedValue({
+          campaignId: 'c1',
+          state: CampaignRunState.EMAIL_FINDING_RUNNING,
+          processedCount: 0,
+          totalCount: 10,
+          errors: [],
+        }),
+        getRun: vi.fn(),
+        createRun: vi.fn(),
+        updateRun: vi.fn(),
+      }
+      const runner = createCampaignRunner({ store })
+      expect(await runner.isRunning('user-123')).toBe(true)
+    })
+
+    it('should return false when store returns null', async () => {
+      const store: CampaignRunStore = {
+        getActiveRun: vi.fn().mockResolvedValue(null),
+        getRun: vi.fn(),
+        createRun: vi.fn(),
+        updateRun: vi.fn(),
+      }
+      const runner = createCampaignRunner({ store })
+      expect(await runner.isRunning('user-123')).toBe(false)
     })
   })
 
-  describe('campaignRunner.getStatus (stub)', () => {
-    it('should throw not implemented error', async () => {
-      await expect(campaignRunner.getStatus('campaign-123')).rejects.toThrow('Not implemented')
+  describe('campaignRunner.getStatus', () => {
+    it('should return progress from store.getRun', async () => {
+      const progress: CampaignRunProgress = {
+        campaignId: 'campaign-123',
+        state: CampaignRunState.DRAFTS_RUNNING,
+        processedCount: 5,
+        totalCount: 10,
+        errors: [],
+        startedAt: new Date(),
+      }
+      const store: CampaignRunStore = {
+        getActiveRun: vi.fn(),
+        getRun: vi.fn().mockResolvedValue(progress),
+        createRun: vi.fn(),
+        updateRun: vi.fn(),
+      }
+      const runner = createCampaignRunner({ store })
+      expect(await runner.getStatus('campaign-123')).toEqual(progress)
     })
   })
 
-  describe('campaignRunner.startEmailFinding (stub)', () => {
-    it('should throw not implemented error', async () => {
-      await expect(campaignRunner.startEmailFinding('user-123', 'campaign-123')).rejects.toThrow(
-        'Not implemented'
-      )
+  describe('campaignRunner.startEmailFinding', () => {
+    it('should call store.createRun with EMAIL_FINDING_RUNNING state', async () => {
+      const store: CampaignRunStore = {
+        getActiveRun: vi.fn().mockResolvedValue(null),
+        getRun: vi.fn(),
+        createRun: vi.fn().mockResolvedValue(undefined),
+        updateRun: vi.fn(),
+      }
+      const runner = createCampaignRunner({ store })
+      const result = await runner.startEmailFinding('user-123', 'campaign-123')
+      expect(result.state).toBe(CampaignRunState.EMAIL_FINDING_RUNNING)
+      expect(store.createRun).toHaveBeenCalledOnce()
     })
   })
 
-  describe('campaignRunner.startInserts (stub)', () => {
-    it('should throw not implemented error', async () => {
-      await expect(campaignRunner.startInserts('user-123', 'campaign-123')).rejects.toThrow(
-        'Not implemented'
-      )
+  describe('campaignRunner.startInserts', () => {
+    it('should call store.createRun with INSERTS_RUNNING state', async () => {
+      const store: CampaignRunStore = {
+        getActiveRun: vi.fn().mockResolvedValue(null),
+        getRun: vi.fn(),
+        createRun: vi.fn().mockResolvedValue(undefined),
+        updateRun: vi.fn(),
+      }
+      const runner = createCampaignRunner({ store })
+      const result = await runner.startInserts('user-123', 'campaign-123')
+      expect(result.state).toBe(CampaignRunState.INSERTS_RUNNING)
+      expect(store.createRun).toHaveBeenCalledOnce()
     })
   })
 
-  describe('campaignRunner.startDrafts (stub)', () => {
-    it('should throw not implemented error', async () => {
-      await expect(
-        campaignRunner.startDrafts('user-123', 'campaign-123', 'template-123')
-      ).rejects.toThrow('Not implemented')
+  describe('campaignRunner.startDrafts', () => {
+    it('should call store.createRun with DRAFTS_RUNNING state', async () => {
+      const store: CampaignRunStore = {
+        getActiveRun: vi.fn().mockResolvedValue(null),
+        getRun: vi.fn(),
+        createRun: vi.fn().mockResolvedValue(undefined),
+        updateRun: vi.fn(),
+      }
+      const runner = createCampaignRunner({ store })
+      const result = await runner.startDrafts('user-123', 'campaign-123', 'template-123')
+      expect(result.state).toBe(CampaignRunState.DRAFTS_RUNNING)
+      expect(store.createRun).toHaveBeenCalledOnce()
     })
   })
 
-  describe('campaignRunner.startSending (stub)', () => {
-    it('should throw not implemented error', async () => {
-      await expect(campaignRunner.startSending('user-123', 'campaign-123')).rejects.toThrow(
-        'Not implemented'
-      )
+  describe('campaignRunner.startSending', () => {
+    it('should call store.createRun with SENDING_RUNNING state', async () => {
+      const store: CampaignRunStore = {
+        getActiveRun: vi.fn().mockResolvedValue(null),
+        getRun: vi.fn(),
+        createRun: vi.fn().mockResolvedValue(undefined),
+        updateRun: vi.fn(),
+      }
+      const runner = createCampaignRunner({ store })
+      const result = await runner.startSending('user-123', 'campaign-123')
+      expect(result.state).toBe(CampaignRunState.SENDING_RUNNING)
+      expect(store.createRun).toHaveBeenCalledOnce()
     })
   })
 
