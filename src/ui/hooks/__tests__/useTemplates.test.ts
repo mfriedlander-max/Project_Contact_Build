@@ -84,4 +84,56 @@ describe('useTemplates', () => {
     })
     expect(result.current.templates).toEqual([])
   })
+
+  it('updates an existing template', async () => {
+    const initial = [{ id: '1', name: 'Welcome', subject: 'Hi', body: 'Hello' }]
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ templates: initial }),
+    })
+
+    const { result } = renderHook(() => useTemplates())
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    const updated = { id: '1', name: 'Updated', subject: 'Hi', body: 'Hello' }
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ template: updated }),
+    })
+
+    await act(async () => {
+      await result.current.updateTemplate('1', { name: 'Updated' })
+    })
+
+    expect(mockFetch).toHaveBeenLastCalledWith('/api/templates', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: '1', name: 'Updated' }),
+    })
+    expect(result.current.templates).toEqual([updated])
+  })
+
+  it('handles update error', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ templates: [{ id: '1', name: 'Welcome' }] }),
+    })
+
+    const { result } = renderHook(() => useTemplates())
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    mockFetch.mockResolvedValueOnce({ ok: false })
+
+    await act(async () => {
+      await result.current.updateTemplate('1', { name: 'Fail' })
+    })
+
+    expect(result.current.error).toBe('Failed to update template')
+  })
 })

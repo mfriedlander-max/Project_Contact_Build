@@ -78,5 +78,27 @@ export function useTemplates() {
     }
   }, [])
 
-  return { templates, isLoading, error, createTemplate, deleteTemplate }
+  const updateTemplate = useCallback(async (id: string, updates: Partial<Template>) => {
+    try {
+      const res = await fetch('/api/templates', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...updates }),
+      })
+
+      if (!res.ok) {
+        setError('Failed to update template')
+        return
+      }
+
+      const data = await res.json()
+      setTemplates((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...data.template } : t))
+      )
+    } catch {
+      setError('Failed to update template')
+    }
+  }, [])
+
+  return { templates, isLoading, error, createTemplate, updateTemplate, deleteTemplate }
 }

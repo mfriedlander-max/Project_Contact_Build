@@ -99,6 +99,7 @@ export async function GET(req: Request) {
       totalPages: Math.ceil(total / limit),
     });
   } catch (error) {
+    console.error("[CONTACTS_GET]", error);
     return new NextResponse("Failed to fetch contacts", { status: 500 });
   }
 }
