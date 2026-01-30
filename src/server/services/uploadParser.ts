@@ -18,7 +18,7 @@ export interface ContactCreateInput {
   email?: string
   company?: string
   position?: string
-  connection_stage: string
+  connection_stage: 'DRAFTED' | 'MESSAGE_SENT' | 'DIDNT_CONNECT' | 'CONNECTED' | 'IN_TOUCH'
   campaignId?: string
   v: number
   [key: string]: string | number | undefined
@@ -95,7 +95,7 @@ export function applyMapping(
 
     return {
       ...mapped,
-      connection_stage: mapped.connection_stage ?? 'DRAFTED',
+      connection_stage: (mapped.connection_stage ?? 'DRAFTED') as ContactCreateInput['connection_stage'],
       v: 0,
       last_name: mapped.last_name ?? '',
     } as ContactCreateInput
