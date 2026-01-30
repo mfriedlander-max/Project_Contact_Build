@@ -39,21 +39,53 @@ function IntegrationCard({
 
 interface HunterApiKeyInputProps {
   onSave: (apiKey: string) => void
+  onTestKey?: (apiKey: string) => Promise<boolean>
   isConnected: boolean
 }
 
-function HunterApiKeyInput({ onSave, isConnected }: HunterApiKeyInputProps) {
+function TestStatusIndicator({ status }: { status: 'idle' | 'testing' | 'valid' | 'invalid' }) {
+  if (status === 'idle') return null
+  if (status === 'testing') return <span className="text-sm text-gray-500">Testing...</span>
+  if (status === 'valid') return <span className="text-sm text-green-600">&#10003; Valid</span>
+  return <span className="text-sm text-red-600">&#10007; Invalid</span>
+}
+
+function HunterApiKeyInput({ onSave, onTestKey, isConnected }: HunterApiKeyInputProps) {
   const [apiKey, setApiKey] = useState('')
   const [showInput, setShowInput] = useState(false)
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'valid' | 'invalid'>('idle')
+
+  const handleTest = async () => {
+    if (!apiKey.trim() && !isConnected) return
+    setTestStatus('testing')
+    try {
+      const valid = await onTestKey?.(apiKey.trim() || '') ?? false
+      setTestStatus(valid ? 'valid' : 'invalid')
+    } catch {
+      setTestStatus('invalid')
+    }
+    setTimeout(() => setTestStatus('idle'), 3000)
+  }
 
   if (isConnected && !showInput) {
     return (
-      <button
-        onClick={() => setShowInput(true)}
-        className="rounded-md bg-green-100 px-4 py-2 text-sm font-medium text-green-700"
-      >
-        Connected
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setShowInput(true)}
+          className="rounded-md bg-green-100 px-4 py-2 text-sm font-medium text-green-700"
+        >
+          Connected
+        </button>
+        {onTestKey && (
+          <button
+            onClick={handleTest}
+            className="rounded-md border px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Test Key
+          </button>
+        )}
+        <TestStatusIndicator status={testStatus} />
+      </div>
     )
   }
 
@@ -69,7 +101,7 @@ function HunterApiKeyInput({ onSave, isConnected }: HunterApiKeyInputProps) {
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="flex items-center gap-2">
       <input
         type="password"
         value={apiKey}
@@ -90,6 +122,15 @@ function HunterApiKeyInput({ onSave, isConnected }: HunterApiKeyInputProps) {
       >
         Save
       </button>
+      {onTestKey && (
+        <button
+          onClick={handleTest}
+          className="rounded-md border px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Test Key
+        </button>
+      )}
+      <TestStatusIndicator status={testStatus} />
     </div>
   )
 }
@@ -116,12 +157,14 @@ interface IntegrationsSectionProps {
   integrations?: readonly { provider: string; isActive: boolean }[]
   isConnected?: (provider: string) => boolean
   onHunterSave?: (apiKey: string) => void
+  onTestHunterKey?: (apiKey: string) => Promise<boolean>
   onGmailConnect?: () => void
 }
 
 export function IntegrationsSection({
   isConnected,
   onHunterSave,
+  onTestHunterKey,
   onGmailConnect,
 }: IntegrationsSectionProps) {
   return (
@@ -142,7 +185,7 @@ export function IntegrationsSection({
                   <h3 className="font-medium">{integration.name}</h3>
                   <p className="text-sm text-gray-500">{integration.description}</p>
                 </div>
-                <HunterApiKeyInput onSave={onHunterSave} isConnected={connected} />
+                <HunterApiKeyInput onSave={onHunterSave} onTestKey={onTestHunterKey} isConnected={connected} />
               </div>
             )
           }
