@@ -1,6 +1,35 @@
 # Orchestration Status
 
-## Current Sprint
+## Current Status: Manual QA In Progress
+**State**: User is manually testing the app locally (localhost:3000) and on Vercel
+**Action**: User will explore, break things, and report issues. Next session will fix issues + complete remaining features.
+
+### Known Issues Found During QA
+- Chat on `/home` doesn't work — `useChatApi` does `res.json()` on an SSE stream (needs streaming reader)
+- Google OAuth returns `invalid_client` on Vercel (works locally)
+- Secrets exposed in chat history — need rotation
+
+### What Works
+- Login page renders, Google OAuth works locally
+- `/sheets` — grid, search, sort, column selector, stage filters, saved views all render with Tailwind
+- `/settings` — tabs (Integrations, Templates, Automation), Hunter key input
+- Auth middleware redirects unauthenticated users to `/login`
+- 925/925 unit tests passing, build green
+
+### Next Session Plan
+1. Fix issues reported from manual QA
+2. Complete remaining features:
+   - AI Home chat (fix streaming client)
+   - "Didn't Connect" rule builder
+   - Template manager (full CRUD)
+   - Gmail OAuth connect flow
+   - App shell polish
+3. Fix Vercel Google OAuth
+4. Rotate secrets
+
+---
+
+## Previous Sprint
 **Goal**: Parallel feature build — Settings (gap fill), Sheets Grid, Upload Contacts, Error Handling UX
 **Started**: 2026-01-30
 **Strategy**: File ownership (no worktrees), all on main branch
