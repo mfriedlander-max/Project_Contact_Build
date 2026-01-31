@@ -114,6 +114,48 @@ Phase 3 (Integration):
 ## Blockers
 - [x] ~~Enum duplication~~ - Agent D to reconcile (import from Agent B's lib/types/enums.ts)
 
+## Post-Build: Code Review + Deploy (2026-01-30)
+
+### Code Review Fixes (commit 73928f8)
+- **CRITICAL**: Added Zod input validation on contacts API POST/PUT (`contactBodySchema`)
+- **CRITICAL**: Forced `assigned_to = userId` on contact creation (security fix)
+- **CRITICAL**: Fixed silent parse error in UploadDialog — now shows alert
+- **CRITICAL**: Changed `console.log` to `console.error` in API error handlers
+- **HIGH**: Fixed stale closure in `useContacts.updateContactStage` via `contactsRef` pattern
+- **HIGH**: Extracted shared `COLUMNS` constant to `src/ui/components/contacts/columns.ts`
+- **HIGH**: Replaced unsafe double-cast in ContactGrid with typed `CONTACT_FIELD_MAP`
+- **HIGH**: Removed re-thrown error in UploadDialog `handleImport`
+- **MEDIUM**: Memoized ToastProvider context value with `useMemo`
+- 925/925 unit tests passing after all fixes
+
+### E2E Tests Written (commit 73928f8)
+- `tests/e2e/helpers/auth.ts` — NextAuth session mock helper
+- `tests/e2e/sheets.spec.ts` — 7 tests (unauth redirect + authenticated grid)
+- `tests/e2e/settings.spec.ts` — 7 tests (unauth redirect + authenticated tabs)
+- `tests/e2e/error-handling.spec.ts` — 2 tests (API error alert, toast container)
+- Run manually with `npx playwright test` (requires dev server)
+
+### Vercel Deploy
+- Removed `pnpm-lock.yaml` (was causing Vercel to use pnpm instead of npm)
+- Added `.npmrc` with `legacy-peer-deps=true` for React 19 peer dep conflicts
+- Fixed build command: removed `prisma db push` and `prisma db seed` from `npm run build`
+- Added `globals.css` with Tailwind directives + CSS variables (was missing, causing unstyled UI)
+- Updated root `app/layout.tsx` to import `globals.css`
+- Root `/` redirects to `/sheets`
+- Env vars set on Vercel: DATABASE_URL, NEXTAUTH_SECRET, NEXTAUTH_URL, JWT_SECRET, GOOGLE_ID, GOOGLE_SECRET, ANTHROPIC_API_KEY, HUNTER_API_KEY
+- Google OAuth redirect URI added for Vercel domain
+- **Production URL**: https://project-contact-build.vercel.app
+- **Note**: Google OAuth returning `invalid_client` on Vercel — works locally on localhost:3000. Needs fresh OAuth client or credential debugging.
+
+### Remaining Work
+- [ ] AI Home page (`/home`) — chat UI, staging panel, campaign runner
+- [ ] "Didn't Connect" rule builder UI
+- [ ] Template manager in Settings (full CRUD)
+- [ ] Gmail OAuth connect flow in Settings
+- [ ] App shell sidebar/topbar polish
+- [ ] Fix Google OAuth on Vercel production
+- [ ] Rotate exposed secrets (NEXTAUTH_SECRET, GOOGLE_SECRET, ANTHROPIC_API_KEY, HUNTER_API_KEY)
+
 ## Completed
 - [x] Initial setup of orchestration system
 - [x] Created `ui-rebuild` branch
@@ -123,3 +165,7 @@ Phase 3 (Integration):
 - [x] **Phase 1 Complete** - Prisma schema, APIs, UI shell, search provider, action schemas
 - [x] **Phase 2 Complete** - UI components, services, integrations, AI orchestration (67 files, 4902 lines)
 - [x] **Phase 3 Complete** - Full integration: UI wired to APIs, all action handlers, pipeline stages, Prisma-backed stores (48 files, 3879 lines)
+- [x] **Feature Sprint Complete** - Settings, Sheets Grid, Upload Contacts, Error Handling (925 tests)
+- [x] **Code Review + Fixes** - 4 CRITICAL, 5 HIGH issues resolved
+- [x] **E2E Tests Written** - 16 tests across 3 spec files
+- [x] **Vercel Deploy** - Production live with Tailwind CSS fix
