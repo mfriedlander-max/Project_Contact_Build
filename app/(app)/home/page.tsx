@@ -41,7 +41,7 @@ function HomeContent() {
     <div className="flex h-full flex-col">
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1">
-          <ChatPanel />
+          <ChatPanel onSendMessage={handleSendMessage} />
         </div>
         {stagedContacts.length > 0 && (
           <div className="w-96 border-l border-gray-200 p-4">
@@ -61,7 +61,7 @@ function HomeContent() {
 
 export default function HomePage() {
   return (
-    <ChatProvider onSendMessage={undefined}>
+    <ChatProvider>
       <HomeContent />
     </ChatProvider>
   )
