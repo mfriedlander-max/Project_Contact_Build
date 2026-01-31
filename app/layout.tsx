@@ -1,8 +1,9 @@
 import { Metadata } from "next"
+import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Student Networking CRM - API",
-  description: "Backend API for Student Networking CRM",
+  title: "Student Networking CRM",
+  description: "AI-powered student networking CRM",
 }
 
 export default function RootLayout({
@@ -12,7 +13,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="min-h-screen bg-background font-sans antialiased">
+        {children}
+      </body>
     </html>
   )
 }
