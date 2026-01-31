@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Contact } from '@/lib/types/contact'
 import type { ConnectionStageType } from '@/lib/types/enums'
 
@@ -31,6 +31,7 @@ export function useContacts({
   const [totalPages, setTotalPages] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const contactsRef = useRef<Contact[]>([])
 
   const fetchContacts = useCallback(async () => {
     setIsLoading(true)
@@ -60,7 +61,9 @@ export function useContacts({
       }
 
       const data = await res.json()
-      setContacts(data.contacts ?? [])
+      const fetched = data.contacts ?? []
+      contactsRef.current = fetched
+      setContacts(fetched)
       setTotal(data.total ?? 0)
       setCurrentPage(data.page ?? 1)
       setTotalPages(data.totalPages ?? 0)
@@ -73,13 +76,13 @@ export function useContacts({
   }, [stage, campaignId, search, sort, order, page, limit, filters])
 
   const updateContactStage = useCallback(async (id: string, newStage: ConnectionStageType) => {
-    const previousContacts = contacts
+    const previousContacts = contactsRef.current
 
-    setContacts(
-      contacts.map((c) =>
-        c.id === id ? { ...c, connection_stage: newStage } : c
-      )
+    const updated = previousContacts.map((c) =>
+      c.id === id ? { ...c, connection_stage: newStage } : c
     )
+    contactsRef.current = updated
+    setContacts(updated)
 
     try {
       const res = await fetch(`/api/crm/contacts/${id}`, {
@@ -89,14 +92,16 @@ export function useContacts({
       })
 
       if (!res.ok) {
+        contactsRef.current = previousContacts
         setContacts(previousContacts)
         setError('Failed to update contact stage')
       }
     } catch {
+      contactsRef.current = previousContacts
       setContacts(previousContacts)
       setError('Failed to update contact stage')
     }
-  }, [contacts])
+  }, [])
 
   useEffect(() => {
     fetchContacts()

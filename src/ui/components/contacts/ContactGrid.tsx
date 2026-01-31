@@ -3,19 +3,7 @@
 import type { Contact } from '@/lib/types/contact'
 import type { ConnectionStageType } from '@/lib/types/enums'
 import { StageBadge } from './StageBadge'
-
-const COLUMNS = [
-  { key: 'name', label: 'Name', fixed: true },
-  { key: 'company', label: 'Company', fixed: false },
-  { key: 'email', label: 'Email', fixed: true },
-  { key: 'connection_stage', label: 'Stage', fixed: true },
-  { key: 'email_status', label: 'Email Status', fixed: false },
-  { key: 'mobile_phone', label: 'Phone', fixed: false },
-  { key: 'social_linkedin', label: 'LinkedIn', fixed: false },
-  { key: 'campaign', label: 'Campaign', fixed: false },
-  { key: 'email_confidence', label: 'Confidence', fixed: false },
-  { key: 'personalized_insert', label: 'Insert Preview', fixed: false },
-] as const
+import { COLUMNS } from './columns'
 
 interface ContactGridProps {
   contacts: Contact[]
@@ -42,16 +30,27 @@ function getSortIndicator(
   return sortOrder === 'asc' ? ' ▲' : ' ▼'
 }
 
-function getCellValue(contact: Contact, columnKey: string): string {
-  if (columnKey === 'name') {
-    const first = contact.first_name ?? ''
-    const last = contact.last_name ?? ''
+const CONTACT_FIELD_MAP: Record<string, (c: Contact) => string> = {
+  name: (c) => {
+    const first = c.first_name ?? ''
+    const last = c.last_name ?? ''
     return first ? `${first} ${last}` : last
-  }
+  },
+  company: (c) => c.company ?? '',
+  email: (c) => c.email ?? '',
+  connection_stage: (c) => c.connection_stage ?? '',
+  email_status: (c) => c.email_status ?? '',
+  mobile_phone: (c) => c.mobile_phone ?? '',
+  social_linkedin: (c) => c.social_linkedin ?? '',
+  campaign: (c) => c.campaign ?? '',
+  email_confidence: (c) => c.email_confidence ?? '',
+  personalized_insert: (c) => c.personalized_insert ?? '',
+}
 
-  const value = (contact as unknown as Record<string, unknown>)[columnKey]
-  if (value == null) return ''
-  return String(value)
+function getCellValue(contact: Contact, columnKey: string): string {
+  const accessor = CONTACT_FIELD_MAP[columnKey]
+  if (!accessor) return ''
+  return accessor(contact)
 }
 
 export function ContactGrid({
@@ -84,10 +83,7 @@ export function ContactGrid({
                 className="cursor-pointer px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500"
                 onClick={() => onSort(col.key)}
               >
-                <span>{col.label}</span>
-                {getSortIndicator(col.key, sortColumn, sortOrder) && (
-                  <span>{getSortIndicator(col.key, sortColumn, sortOrder)}</span>
-                )}
+                <span>{col.label}{getSortIndicator(col.key, sortColumn, sortOrder)}</span>
               </th>
             ))}
           </tr>

@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useCallback, useRef, useState, useEffect } from 'react'
+import { createContext, useContext, useCallback, useRef, useState, useEffect, useMemo } from 'react'
 import React from 'react'
 
 const DEFAULT_DURATION = 5000
@@ -109,14 +109,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [addToast]
   )
 
-  const value: ToastContextValue = {
+  const value = useMemo<ToastContextValue>(() => ({
     toasts,
     addToast,
     removeToast,
     success,
     error,
     undo,
-  }
+  }), [toasts, addToast, removeToast, success, error, undo])
 
   return React.createElement(ToastContext.Provider, { value }, children)
 }

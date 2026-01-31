@@ -5,6 +5,34 @@ import { authOptions } from "@/lib/auth";
 import { z } from "zod";
 import type { ConnectionLevel } from "@prisma/client";
 
+const contactBodySchema = z.object({
+  id: z.string().optional(),
+  assigned_account: z.string().nullable().optional(),
+  birthday_day: z.string().optional(),
+  birthday_month: z.string().optional(),
+  birthday_year: z.string().optional(),
+  description: z.string().optional(),
+  email: z.string().email().optional(),
+  personal_email: z.string().email().optional().nullable(),
+  first_name: z.string().optional(),
+  last_name: z.string(),
+  office_phone: z.string().optional(),
+  mobile_phone: z.string().optional(),
+  website: z.string().optional(),
+  status: z.boolean().optional(),
+  social_twitter: z.string().optional(),
+  social_facebook: z.string().optional(),
+  social_linkedin: z.string().optional(),
+  social_skype: z.string().optional(),
+  social_instagram: z.string().optional(),
+  social_youtube: z.string().optional(),
+  social_tiktok: z.string().optional(),
+  type: z.string().optional(),
+  company: z.string().optional(),
+  campaign: z.string().optional(),
+  connection_level: z.string().optional(),
+});
+
 // --- GET handler: list contacts with filter, sort, pagination ---
 
 const connectionStageEnum = z.enum([
@@ -127,93 +155,69 @@ export async function POST(req: Request) {
     return new NextResponse("Unauthenticated", { status: 401 });
   }
   try {
-    const body = await req.json();
+    const raw = await req.json();
     const userId = session.user.id;
 
-    if (!body) {
-      return new NextResponse("No form data", { status: 400 });
+    const parsed = contactBodySchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid request body", details: parsed.error.flatten() },
+        { status: 400 }
+      );
     }
 
-    const {
-      assigned_to,
-      assigned_account,
-      birthday_day,
-      birthday_month,
-      birthday_year,
-      description,
-      email,
-      personal_email,
-      first_name,
-      last_name,
-      office_phone,
-      mobile_phone,
-      website,
-      status,
-      social_twitter,
-      social_facebook,
-      social_linkedin,
-      social_skype,
-      social_instagram,
-      social_youtube,
-      social_tiktok,
-      type,
-      // Student Networking CRM - Workflow Fields
-      company,
-      campaign,
-      connection_level,
-    } = body;
-
-    // Validate connection_level enum
-    const validatedConnectionLevel = validateConnectionLevel(connection_level);
+    const body = parsed.data;
+    const validatedConnectionLevel = validateConnectionLevel(body.connection_level);
 
     const newContact = await prismadb.crm_Contacts.create({
       data: {
         v: 0,
         createdBy: userId,
         updatedBy: userId,
-        ...(assigned_account !== null && assigned_account !== undefined
+        ...(body.assigned_account
           ? {
               assigned_accounts: {
                 connect: {
-                  id: assigned_account,
+                  id: body.assigned_account,
                 },
               },
             }
           : {}),
         assigned_to_user: {
           connect: {
-            id: assigned_to,
+            id: userId,
           },
         },
-        birthday: birthday_day + "/" + birthday_month + "/" + birthday_year,
-        description,
-        email,
-        personal_email,
-        first_name,
-        last_name,
-        office_phone,
-        mobile_phone,
-        website,
-        status,
-        social_twitter,
-        social_facebook,
-        social_linkedin,
-        social_skype,
-        social_instagram,
-        social_youtube,
-        social_tiktok,
-        type,
-        // Student Networking CRM - Workflow Fields
-        company,
-        campaign,
+        ...(body.birthday_day && body.birthday_month && body.birthday_year
+          ? { birthday: `${body.birthday_day}/${body.birthday_month}/${body.birthday_year}` }
+          : {}),
+        description: body.description,
+        email: body.email,
+        personal_email: body.personal_email,
+        first_name: body.first_name,
+        last_name: body.last_name,
+        office_phone: body.office_phone,
+        mobile_phone: body.mobile_phone,
+        website: body.website,
+        status: body.status,
+        social_twitter: body.social_twitter,
+        social_facebook: body.social_facebook,
+        social_linkedin: body.social_linkedin,
+        social_skype: body.social_skype,
+        social_instagram: body.social_instagram,
+        social_youtube: body.social_youtube,
+        social_tiktok: body.social_tiktok,
+        type: body.type,
+        company: body.company,
+        campaign: body.campaign,
         connection_level: validatedConnectionLevel,
       },
     });
 
     return NextResponse.json({ newContact }, { status: 200 });
   } catch (error) {
-    console.log("[NEW_CONTACT_POST]", error);
-    return new NextResponse("Initial error", { status: 500 });
+    console.error("[NEW_CONTACT_POST]", error);
+    return new NextResponse("Failed to create contact", { status: 500 });
   }
 }
 
@@ -224,50 +228,25 @@ export async function PUT(req: Request) {
     return new NextResponse("Unauthenticated", { status: 401 });
   }
   try {
-    const body = await req.json();
+    const raw = await req.json();
     const userId = session.user.id;
 
-    if (!body) {
-      return new NextResponse("No form data", { status: 400 });
+    const updateSchema = contactBodySchema.extend({ id: z.string() });
+    const parsed = updateSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid request body", details: parsed.error.flatten() },
+        { status: 400 }
+      );
     }
 
-    const {
-      id,
-      assigned_account,
-      assigned_to,
-      birthday_day,
-      birthday_month,
-      birthday_year,
-      description,
-      email,
-      personal_email,
-      first_name,
-      last_name,
-      office_phone,
-      mobile_phone,
-      website,
-      status,
-      social_twitter,
-      social_facebook,
-      social_linkedin,
-      social_skype,
-      social_instagram,
-      social_youtube,
-      social_tiktok,
-      type,
-      // Student Networking CRM - Workflow Fields
-      company,
-      campaign,
-      connection_level,
-    } = body;
-
-    // Validate connection_level enum
-    const validatedConnectionLevel = validateConnectionLevel(connection_level);
+    const body = parsed.data;
+    const validatedConnectionLevel = validateConnectionLevel(body.connection_level);
 
     // Verify user has access to this contact before updating
     const existingContact = await prismadb.crm_Contacts.findFirst({
       where: {
-        id,
+        id: body.id,
         assigned_to: userId,
       },
     });
@@ -281,47 +260,47 @@ export async function PUT(req: Request) {
 
     const newContact = await prismadb.crm_Contacts.update({
       where: {
-        id,
+        id: body.id,
       },
       data: {
         v: 0,
         updatedBy: userId,
-        //Update assigned_accountsIDs only if assigned_account is not empty
-        ...(assigned_account !== null && assigned_account !== undefined
+        ...(body.assigned_account
           ? {
               assigned_accounts: {
                 connect: {
-                  id: assigned_account,
+                  id: body.assigned_account,
                 },
               },
             }
           : {}),
         assigned_to_user: {
           connect: {
-            id: assigned_to,
+            id: userId,
           },
         },
-        birthday: birthday_day + "/" + birthday_month + "/" + birthday_year,
-        description,
-        email,
-        personal_email,
-        first_name,
-        last_name,
-        office_phone,
-        mobile_phone,
-        website,
-        status,
-        social_twitter,
-        social_facebook,
-        social_linkedin,
-        social_skype,
-        social_instagram,
-        social_youtube,
-        social_tiktok,
-        type,
-        // Student Networking CRM - Workflow Fields
-        company,
-        campaign,
+        ...(body.birthday_day && body.birthday_month && body.birthday_year
+          ? { birthday: `${body.birthday_day}/${body.birthday_month}/${body.birthday_year}` }
+          : {}),
+        description: body.description,
+        email: body.email,
+        personal_email: body.personal_email,
+        first_name: body.first_name,
+        last_name: body.last_name,
+        office_phone: body.office_phone,
+        mobile_phone: body.mobile_phone,
+        website: body.website,
+        status: body.status,
+        social_twitter: body.social_twitter,
+        social_facebook: body.social_facebook,
+        social_linkedin: body.social_linkedin,
+        social_skype: body.social_skype,
+        social_instagram: body.social_instagram,
+        social_youtube: body.social_youtube,
+        social_tiktok: body.social_tiktok,
+        type: body.type,
+        company: body.company,
+        campaign: body.campaign,
         connection_level: validatedConnectionLevel,
       },
     });
@@ -353,7 +332,7 @@ export async function PUT(req: Request) {
 
     return NextResponse.json({ newContact }, { status: 200 });
   } catch (error) {
-    console.log("UPDATE_CONTACT_PUT]", error);
-    return new NextResponse("Initial error", { status: 500 });
+    console.error("[UPDATE_CONTACT_PUT]", error);
+    return new NextResponse("Failed to update contact", { status: 500 });
   }
 }

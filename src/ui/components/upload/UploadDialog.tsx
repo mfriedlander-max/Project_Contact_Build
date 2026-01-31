@@ -110,8 +110,15 @@ export function UploadDialog({
           file,
           parsed,
         }))
-      } catch {
-        // parse error handled silently
+      } catch (parseError) {
+        setState((prev) => ({
+          ...prev,
+          file: null,
+          parsed: null,
+        }))
+        window.alert(
+          `Failed to parse file: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`
+        )
       }
     }
 
@@ -201,9 +208,9 @@ export function UploadDialog({
       resetState()
       onImportComplete(count)
       onClose()
-    } catch (error) {
+    } catch {
       setState((prev) => ({ ...prev, isImporting: false }))
-      throw error
+      window.alert('Import failed. Please try again.')
     }
   }, [state.validContacts, campaignId, resetState, onImportComplete, onClose])
 

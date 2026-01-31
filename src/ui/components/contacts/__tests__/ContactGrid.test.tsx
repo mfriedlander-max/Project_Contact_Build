@@ -66,13 +66,13 @@ describe('ContactGrid', () => {
 
   it('shows sort indicator on sorted column (asc)', () => {
     render(<ContactGrid {...defaultProps} sortColumn="name" sortOrder="asc" />)
-    const header = screen.getByText('Name').closest('th')
+    const header = screen.getByText(/^Name/).closest('th')
     expect(header?.textContent).toContain('▲')
   })
 
   it('shows sort indicator on sorted column (desc)', () => {
     render(<ContactGrid {...defaultProps} sortColumn="name" sortOrder="desc" />)
-    const header = screen.getByText('Name').closest('th')
+    const header = screen.getByText(/^Name/).closest('th')
     expect(header?.textContent).toContain('▼')
   })
 
