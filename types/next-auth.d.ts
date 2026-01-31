@@ -20,5 +20,6 @@ declare module "next-auth" {
       userLanguage: string;
       userStatus: string;
     };
+    accessToken?: string;
   }
 }

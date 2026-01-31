@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { signIn } from 'next-auth/react'
 import { IntegrationsSection } from '@/src/ui/components/settings/IntegrationsSection'
 import { TemplatesSection } from '@/src/ui/components/settings/TemplatesSection'
 import { AutomationSection } from '@/src/ui/components/settings/AutomationSection'
@@ -27,7 +28,7 @@ export default function SettingsPage() {
   }
 
   const handleGmailConnect = () => {
-    window.location.href = '/api/auth/gmail/connect'
+    signIn('google', { callbackUrl: '/settings' })
   }
 
   const handleSettingChange = async (key: string, value: boolean | string | number) => {

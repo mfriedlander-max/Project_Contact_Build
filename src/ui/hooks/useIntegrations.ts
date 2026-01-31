@@ -23,13 +23,41 @@ export function useIntegrations() {
   useEffect(() => {
     const fetchIntegrations = async () => {
       try {
-        const res = await fetch('/api/integrations', { method: 'GET' })
-        if (!res.ok) {
+        const [integrationsRes, gmailStatusRes] = await Promise.all([
+          fetch('/api/integrations', { method: 'GET' }),
+          fetch('/api/integrations/gmail/status', { method: 'GET' }),
+        ])
+
+        if (!integrationsRes.ok) {
           setError('Failed to fetch integrations')
           return
         }
-        const data = await res.json()
-        setIntegrations(data.integrations ?? [])
+
+        const integrationsData = await integrationsRes.json()
+        const fetchedIntegrations = integrationsData.integrations ?? []
+
+        // Add Gmail connection status from session
+        if (gmailStatusRes.ok) {
+          const gmailData = await gmailStatusRes.json()
+          if (gmailData.connected) {
+            // Add or update Gmail integration
+            const hasGmail = fetchedIntegrations.some((i: Integration) => i.provider === 'GMAIL')
+            if (!hasGmail) {
+              fetchedIntegrations.push({
+                provider: 'GMAIL',
+                isActive: true,
+              })
+            } else {
+              const gmailIndex = fetchedIntegrations.findIndex((i: Integration) => i.provider === 'GMAIL')
+              fetchedIntegrations[gmailIndex] = {
+                ...fetchedIntegrations[gmailIndex],
+                isActive: true,
+              }
+            }
+          }
+        }
+
+        setIntegrations(fetchedIntegrations)
       } catch {
         setError('Failed to fetch integrations')
       } finally {
