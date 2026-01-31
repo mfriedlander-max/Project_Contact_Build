@@ -1,13 +1,19 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ToastProvider as ToastContextProvider, useToast } from '@/src/ui/hooks/useToast'
 import { Toast } from '@/src/ui/components/toast/Toast'
 
 function ToastPortal() {
   const { toasts, removeToast } = useToast()
+  const [mounted, setMounted] = useState(false)
 
-  if (typeof document === 'undefined') {
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
     return null
   }
 
