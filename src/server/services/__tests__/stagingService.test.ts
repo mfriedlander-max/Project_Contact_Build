@@ -16,6 +16,9 @@ vi.mock('@/lib/prisma', () => ({
       update: vi.fn(),
       deleteMany: vi.fn(),
     },
+    crm_Contacts: {
+      findMany: vi.fn(),
+    },
     $transaction: vi.fn((fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
   },
 }))
@@ -145,6 +148,308 @@ describe('stagingService', () => {
 
       expect(mockPrisma.stagedContactList.deleteMany).toHaveBeenCalledWith({
         where: { userId: USER_ID },
+      })
+    })
+  })
+
+  describe('findExistingContacts', () => {
+    it('should detect email match in email field', async () => {
+      const existingContacts = [
+        {
+          email: 'jane.smith@example.com',
+          personal_email: null,
+          social_linkedin: null,
+          first_name: 'Jane',
+          last_name: 'Smith',
+          company: 'TechCorp',
+        },
+      ]
+
+      mockPrisma.crm_Contacts.findMany.mockResolvedValue(existingContacts as never)
+
+      const candidates = [
+        {
+          lastName: 'Doe',
+          email: 'john.doe@example.com', // Not a match
+        },
+        {
+          lastName: 'Smith',
+          email: 'jane.smith@example.com', // MATCH via email
+        },
+      ]
+
+      const duplicates = await stagingService.findExistingContacts(USER_ID, candidates)
+
+      expect(duplicates).toEqual(new Set([1]))
+    })
+
+    it('should detect email match in personal_email field', async () => {
+      const existingContacts = [
+        {
+          email: null,
+          personal_email: 'jane@personal.com',
+          social_linkedin: null,
+          first_name: 'Jane',
+          last_name: 'Smith',
+          company: 'TechCorp',
+        },
+      ]
+
+      mockPrisma.crm_Contacts.findMany.mockResolvedValue(existingContacts as never)
+
+      const candidates = [
+        {
+          lastName: 'Smith',
+          email: 'jane@personal.com', // MATCH via personal_email
+        },
+      ]
+
+      const duplicates = await stagingService.findExistingContacts(USER_ID, candidates)
+
+      expect(duplicates).toEqual(new Set([0]))
+    })
+
+    it('should detect LinkedIn URL match', async () => {
+      const existingContacts = [
+        {
+          email: null,
+          personal_email: null,
+          social_linkedin: 'https://linkedin.com/in/janesmith',
+          first_name: 'Jane',
+          last_name: 'Smith',
+          company: 'TechCorp',
+        },
+      ]
+
+      mockPrisma.crm_Contacts.findMany.mockResolvedValue(existingContacts as never)
+
+      const candidates = [
+        {
+          lastName: 'Smith',
+          linkedinUrl: 'https://linkedin.com/in/janesmith', // MATCH
+        },
+        {
+          lastName: 'Doe',
+          linkedinUrl: 'https://linkedin.com/in/johndoe', // Not a match
+        },
+      ]
+
+      const duplicates = await stagingService.findExistingContacts(USER_ID, candidates)
+
+      expect(duplicates).toEqual(new Set([0]))
+    })
+
+    it('should normalize LinkedIn URLs (protocol and trailing slash)', async () => {
+      const existingContacts = [
+        {
+          email: null,
+          personal_email: null,
+          social_linkedin: 'https://linkedin.com/in/janesmith/',
+          first_name: 'Jane',
+          last_name: 'Smith',
+          company: 'TechCorp',
+        },
+      ]
+
+      mockPrisma.crm_Contacts.findMany.mockResolvedValue(existingContacts as never)
+
+      const candidates = [
+        {
+          lastName: 'Smith',
+          linkedinUrl: 'http://linkedin.com/in/janesmith', // MATCH (different protocol, no trailing slash)
+        },
+      ]
+
+      const duplicates = await stagingService.findExistingContacts(USER_ID, candidates)
+
+      expect(duplicates).toEqual(new Set([0]))
+    })
+
+    it('should detect name + company match (case insensitive)', async () => {
+      const existingContacts = [
+        {
+          email: null,
+          personal_email: null,
+          social_linkedin: null,
+          first_name: 'Jane',
+          last_name: 'Smith',
+          company: 'TechCorp',
+        },
+      ]
+
+      mockPrisma.crm_Contacts.findMany.mockResolvedValue(existingContacts as never)
+
+      const candidates = [
+        {
+          firstName: 'jane', // Case insensitive match
+          lastName: 'SMITH',
+          company: 'techcorp',
+        },
+      ]
+
+      const duplicates = await stagingService.findExistingContacts(USER_ID, candidates)
+
+      expect(duplicates).toEqual(new Set([0]))
+    })
+
+    it('should NOT match if only name matches but company differs', async () => {
+      const existingContacts = [
+        {
+          email: null,
+          personal_email: null,
+          social_linkedin: null,
+          first_name: 'Jane',
+          last_name: 'Smith',
+          company: 'TechCorp',
+        },
+      ]
+
+      mockPrisma.crm_Contacts.findMany.mockResolvedValue(existingContacts as never)
+
+      const candidates = [
+        {
+          firstName: 'Jane',
+          lastName: 'Smith',
+          company: 'DifferentCorp', // Different company = not a duplicate
+        },
+      ]
+
+      const duplicates = await stagingService.findExistingContacts(USER_ID, candidates)
+
+      expect(duplicates).toEqual(new Set()) // No matches
+    })
+
+    it('should NOT match if name is similar but not exact', async () => {
+      const existingContacts = [
+        {
+          email: null,
+          personal_email: null,
+          social_linkedin: null,
+          first_name: 'Jane',
+          last_name: 'Smith',
+          company: 'TechCorp',
+        },
+      ]
+
+      mockPrisma.crm_Contacts.findMany.mockResolvedValue(existingContacts as never)
+
+      const candidates = [
+        {
+          firstName: 'Janet', // Similar but not exact
+          lastName: 'Smith',
+          company: 'TechCorp',
+        },
+      ]
+
+      const duplicates = await stagingService.findExistingContacts(USER_ID, candidates)
+
+      expect(duplicates).toEqual(new Set()) // No matches
+    })
+
+    it('should detect multiple duplicates using different strategies', async () => {
+      const existingContacts = [
+        {
+          email: 'jane@example.com',
+          personal_email: null,
+          social_linkedin: null,
+          first_name: 'Jane',
+          last_name: 'Smith',
+          company: 'TechCorp',
+        },
+        {
+          email: null,
+          personal_email: null,
+          social_linkedin: 'https://linkedin.com/in/bobdoe',
+          first_name: 'Bob',
+          last_name: 'Doe',
+          company: 'StartupCo',
+        },
+        {
+          email: null,
+          personal_email: null,
+          social_linkedin: null,
+          first_name: 'Alice',
+          last_name: 'Johnson',
+          company: 'BigCorp',
+        },
+      ]
+
+      mockPrisma.crm_Contacts.findMany.mockResolvedValue(existingContacts as never)
+
+      const candidates = [
+        {
+          lastName: 'Smith',
+          email: 'jane@example.com', // Duplicate via email
+        },
+        {
+          lastName: 'New',
+          email: 'new@example.com', // Not a duplicate
+        },
+        {
+          lastName: 'Doe',
+          linkedinUrl: 'https://linkedin.com/in/bobdoe', // Duplicate via LinkedIn
+        },
+        {
+          firstName: 'Alice',
+          lastName: 'Johnson',
+          company: 'BigCorp', // Duplicate via name + company
+        },
+      ]
+
+      const duplicates = await stagingService.findExistingContacts(USER_ID, candidates)
+
+      expect(duplicates).toEqual(new Set([0, 2, 3]))
+    })
+
+    it('should handle empty existing contacts', async () => {
+      mockPrisma.crm_Contacts.findMany.mockResolvedValue([])
+
+      const candidates = [
+        {
+          lastName: 'Smith',
+          email: 'jane@example.com',
+        },
+      ]
+
+      const duplicates = await stagingService.findExistingContacts(USER_ID, candidates)
+
+      expect(duplicates).toEqual(new Set()) // No existing contacts = no duplicates
+    })
+
+    it('should handle empty candidates', async () => {
+      const existingContacts = [
+        {
+          email: 'jane@example.com',
+          personal_email: null,
+          social_linkedin: null,
+          first_name: 'Jane',
+          last_name: 'Smith',
+          company: 'TechCorp',
+        },
+      ]
+
+      mockPrisma.crm_Contacts.findMany.mockResolvedValue(existingContacts as never)
+
+      const duplicates = await stagingService.findExistingContacts(USER_ID, [])
+
+      expect(duplicates).toEqual(new Set()) // No candidates = no duplicates
+    })
+
+    it('should query only active contacts for the user', async () => {
+      mockPrisma.crm_Contacts.findMany.mockResolvedValue([])
+
+      await stagingService.findExistingContacts(USER_ID, [{ lastName: 'Test' }])
+
+      expect(mockPrisma.crm_Contacts.findMany).toHaveBeenCalledWith({
+        where: { assigned_to: USER_ID, status: true },
+        select: {
+          email: true,
+          personal_email: true,
+          social_linkedin: true,
+          first_name: true,
+          last_name: true,
+          company: true,
+        },
       })
     })
   })
