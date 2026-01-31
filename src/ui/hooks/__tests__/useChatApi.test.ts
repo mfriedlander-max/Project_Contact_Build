@@ -26,6 +26,9 @@ describe('useChatApi', () => {
   it('sends message to /api/ai/chat and returns reply', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
+      headers: {
+        get: (name: string) => (name === 'Content-Type' ? 'application/json' : null),
+      },
       json: async () => ({
         reply: 'Found 3 contacts',
         actions: [],
@@ -56,6 +59,9 @@ describe('useChatApi', () => {
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
+      headers: {
+        get: (name: string) => (name === 'Content-Type' ? 'application/json' : null),
+      },
       json: async () => ({
         reply: 'Found 2 contacts',
         actions: [],
@@ -113,6 +119,9 @@ describe('useChatApi', () => {
     // Set initial staged contacts
     mockFetch.mockResolvedValueOnce({
       ok: true,
+      headers: {
+        get: (name: string) => (name === 'Content-Type' ? 'application/json' : null),
+      },
       json: async () => ({
         reply: 'Found',
         actions: [],
@@ -152,6 +161,9 @@ describe('useChatApi', () => {
     // First populate staging
     mockFetch.mockResolvedValueOnce({
       ok: true,
+      headers: {
+        get: (name: string) => (name === 'Content-Type' ? 'application/json' : null),
+      },
       json: async () => ({
         reply: 'Found',
         actions: [],
@@ -191,11 +203,95 @@ describe('useChatApi', () => {
     await act(async () => {
       resolvePromise!({
         ok: true,
+        headers: {
+          get: (name: string) => (name === 'Content-Type' ? 'application/json' : null),
+        },
         json: async () => ({ reply: 'Done', actions: [], stagedContacts: [] }),
       })
       await sendPromise
     })
 
     expect(result.current.isLoading).toBe(false)
+  })
+
+  it('handles SSE streaming responses from chat API', async () => {
+    // Create a mock SSE stream
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"text","text":"Hello"}\n\n'))
+        controller.enqueue(encoder.encode('data: {"type":"text","text":" World"}\n\n'))
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        controller.close()
+      },
+    })
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      headers: {
+        get: (name: string) => (name === 'Content-Type' ? 'text/event-stream' : null),
+      },
+      body: stream,
+    })
+
+    const { result } = renderHook(() => useChatApi())
+
+    let response: { reply: string } | undefined
+    await act(async () => {
+      response = await result.current.sendMessage('Tell me something', AiMode.ASSISTANT)
+    })
+
+    expect(response?.reply).toBe('Hello World')
+  })
+
+  it('handles SSE error events', async () => {
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"error","error":"AI service failed"}\n\n'))
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        controller.close()
+      },
+    })
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      headers: {
+        get: (name: string) => (name === 'Content-Type' ? 'text/event-stream' : null),
+      },
+      body: stream,
+    })
+
+    const { result } = renderHook(() => useChatApi())
+
+    let response: { reply: string } | undefined
+    await act(async () => {
+      response = await result.current.sendMessage('Tell me something', AiMode.ASSISTANT)
+    })
+
+    expect(result.current.error).toBeTruthy()
+    expect(response?.reply).toBe('')
+  })
+
+  it('handles JSON responses for action requests', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      headers: {
+        get: (name: string) => (name === 'Content-Type' ? 'application/json' : null),
+      },
+      json: async () => ({
+        reply: 'Action completed',
+        actions: [],
+      }),
+    })
+
+    const { result } = renderHook(() => useChatApi())
+
+    let response: { reply: string } | undefined
+    await act(async () => {
+      response = await result.current.sendMessage('Execute action', AiMode.GENERAL_MANAGER)
+    })
+
+    expect(response?.reply).toBe('Action completed')
   })
 })
