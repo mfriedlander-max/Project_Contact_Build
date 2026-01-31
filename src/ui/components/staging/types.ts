@@ -4,4 +4,5 @@ export interface StagedContact {
   company: string
   email: string
   position?: string
+  summary?: string
 }

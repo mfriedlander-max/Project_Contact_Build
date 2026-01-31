@@ -47,9 +47,9 @@ describe('HomePage with staged contacts', () => {
     expect(screen.getByText(/find contacts at tech companies/i)).toBeInTheDocument()
   })
 
-  it('renders approve and clear buttons', () => {
+  it('renders "Create Campaign" and clear buttons', () => {
     render(<HomePage />)
-    expect(screen.getByRole('button', { name: /approve/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /create campaign/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /clear/i })).toBeInTheDocument()
   })
 })
