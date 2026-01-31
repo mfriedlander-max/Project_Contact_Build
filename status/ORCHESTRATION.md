@@ -177,13 +177,15 @@ Phase 3 (Integration):
 - **Note**: Google OAuth returning `invalid_client` on Vercel — works locally on localhost:3000. Needs fresh OAuth client or credential debugging.
 
 ### Remaining Work
-- [ ] AI Home page (`/home`) — chat UI, staging panel, campaign runner
-- [ ] "Didn't Connect" rule builder UI
-- [ ] Template manager in Settings (full CRUD)
-- [ ] Gmail OAuth connect flow in Settings
 - [ ] App shell sidebar/topbar polish
 - [ ] Fix Google OAuth on Vercel production
 - [ ] Rotate exposed secrets (NEXTAUTH_SECRET, GOOGLE_SECRET, ANTHROPIC_API_KEY, HUNTER_API_KEY)
+
+### Recently Completed (2026-01-31)
+- [x] AI Home page (`/home`) — Fixed SSE streaming bug, chat now works
+- [x] "Didn't Connect" rule builder UI — Agent 2 built rule builder with action selector
+- [x] Template manager in Settings (full CRUD) — Wired up "Set Default" button
+- [x] Gmail OAuth connect flow in Settings — Agent 3 built Gmail status check and connect button
 
 ## Completed
 - [x] Initial setup of orchestration system

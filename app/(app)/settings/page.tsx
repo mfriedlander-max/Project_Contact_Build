@@ -35,6 +35,10 @@ export default function SettingsPage() {
     await updateSettings({ [key]: value })
   }
 
+  const handleSetDefaultTemplate = async (id: string) => {
+    await updateTemplate(id, { isDefault: true })
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -74,6 +78,7 @@ export default function SettingsPage() {
           onCreateTemplate={createTemplate}
           onUpdateTemplate={updateTemplate}
           onDeleteTemplate={deleteTemplate}
+          onSetDefault={handleSetDefaultTemplate}
         />
       )}
       {activeTab === 'automation' && (
