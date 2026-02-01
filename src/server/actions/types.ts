@@ -22,8 +22,8 @@ export type { AiModeType, AiActionTypeValue }
  */
 export const ACTION_MODE_REQUIREMENTS: Record<AiActionTypeValue, AiModeType[]> = {
   // Contact Finder
-  [AiActionType.FIND_CONTACTS]: [AiMode.CONTACT_FINDER],
-  [AiActionType.SHOW_STAGED_RESULTS]: [AiMode.CONTACT_FINDER, AiMode.GENERAL_MANAGER],
+  [AiActionType.FIND_CONTACTS]: [AiMode.CONTACT_FINDER, AiMode.ASSISTANT],
+  [AiActionType.SHOW_STAGED_RESULTS]: [AiMode.CONTACT_FINDER, AiMode.GENERAL_MANAGER, AiMode.ASSISTANT],
   [AiActionType.DELETE_STAGED_ROW]: [AiMode.CONTACT_FINDER, AiMode.ASSISTANT],
   [AiActionType.APPROVE_STAGED_LIST]: [AiMode.CONTACT_FINDER, AiMode.ASSISTANT],
 

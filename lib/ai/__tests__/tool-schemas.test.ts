@@ -79,18 +79,18 @@ describe('getToolsForMode', () => {
   })
 
   describe('ASSISTANT mode', () => {
-    it('should return 12 tools for ASSISTANT mode', () => {
+    it('should return 14 tools for ASSISTANT mode', () => {
       const tools = getToolsForMode(AiMode.ASSISTANT)
 
-      // ASSISTANT mode has 12 tools (doesn't include FIND_CONTACTS or SHOW_STAGED_RESULTS)
-      expect(tools.length).toBe(12)
+      // ASSISTANT mode has all 14 tools
+      expect(tools.length).toBe(14)
 
       const toolNames = tools.map((t) => t.name)
 
-      // Should include ASSISTANT-allowed tools
+      // Should include all 14 tools
       const allExpectedTools = [
-        // Note: find_contacts is ONLY in CONTACT_FINDER mode
-        // Note: show_staged_results is in CONTACT_FINDER and GENERAL_MANAGER modes only
+        'find_contacts',
+        'show_staged_results',
         'delete_staged_row',
         'approve_staged_list',
         'run_email_finding',
@@ -106,7 +106,7 @@ describe('getToolsForMode', () => {
       ]
 
       expect(toolNames).toEqual(expect.arrayContaining(allExpectedTools))
-      expect(toolNames.length).toBe(12)
+      expect(toolNames.length).toBe(14)
     })
 
     it('should include all mutation tools', () => {
