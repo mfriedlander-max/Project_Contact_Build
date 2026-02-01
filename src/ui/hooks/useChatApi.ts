@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { AiMode } from '@/lib/types/enums'
 import type { AiModeType } from '@/lib/types/enums'
 import type { StagedContact } from '@/src/ui/components/staging/types'
 import type { ChatAction } from '@/src/ui/components/chat/ChatContext'
@@ -11,7 +12,36 @@ interface ChatResponse {
   stagedContacts?: StagedContact[]
 }
 
-async function readSSEStream(body: ReadableStream<Uint8Array> | null): Promise<string> {
+interface PendingConfirmation {
+  actionType: string
+  payload: unknown
+  message: string
+  lastMessage: string
+}
+
+interface SSEEvent {
+  type: 'text' | 'tool_result' | 'confirmation_required' | 'tool_error' | 'error'
+  text?: string
+  tool?: string
+  result?: unknown
+  message?: string
+  actionType?: string
+  payload?: unknown
+  error?: string
+}
+
+interface StreamCallbacks {
+  onText: (text: string) => void
+  onToolResult: (tool: string, result: unknown) => void
+  onConfirmationRequired: (message: string, actionType: string, payload: unknown) => void
+  onToolError: (tool: string, error: string) => void
+  onError: (error: string) => void
+}
+
+async function readSSEStream(
+  body: ReadableStream<Uint8Array> | null,
+  callbacks: StreamCallbacks
+): Promise<string> {
   if (!body) return ''
 
   const reader = body.getReader()
@@ -35,11 +65,35 @@ async function readSSEStream(body: ReadableStream<Uint8Array> | null): Promise<s
         if (data === '[DONE]') return accumulated
 
         try {
-          const parsed = JSON.parse(data)
-          if (parsed.type === 'text') {
-            accumulated += parsed.text
-          } else if (parsed.type === 'error') {
-            throw new Error(parsed.error)
+          const parsed: SSEEvent = JSON.parse(data)
+
+          switch (parsed.type) {
+            case 'text':
+              if (parsed.text) {
+                accumulated += parsed.text
+                callbacks.onText(parsed.text)
+              }
+              break
+            case 'tool_result':
+              if (parsed.tool && parsed.result !== undefined) {
+                callbacks.onToolResult(parsed.tool, parsed.result)
+              }
+              break
+            case 'confirmation_required':
+              if (parsed.message && parsed.actionType && parsed.payload !== undefined) {
+                callbacks.onConfirmationRequired(parsed.message, parsed.actionType, parsed.payload)
+              }
+              break
+            case 'tool_error':
+              if (parsed.tool && parsed.error) {
+                callbacks.onToolError(parsed.tool, parsed.error)
+              }
+              break
+            case 'error':
+              if (parsed.error) {
+                callbacks.onError(parsed.error)
+              }
+              break
           }
         } catch (err) {
           if (err instanceof Error) throw err
@@ -58,53 +112,98 @@ export function useChatApi() {
   const [stagingQuery, setStagingQuery] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
-  const sendMessage = useCallback(async (message: string, mode: AiModeType): Promise<ChatResponse> => {
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, mode }),
-      })
-
-      if (!res.ok) {
-        const errorMsg = 'Chat request failed'
-        setError(errorMsg)
-        return { reply: 'AI endpoint not yet connected', actions: [] }
+  const sendMessage = useCallback(
+    async (
+      message: string,
+      mode: AiModeType,
+      confirmationData?: {
+        userConfirmed: boolean
+        actionType: string
+        payload: unknown
       }
+    ): Promise<ChatResponse> => {
+      setIsLoading(true)
+      setError(null)
 
-      const contentType = res.headers.get('Content-Type')
-
-      if (contentType?.includes('text/event-stream')) {
-        try {
-          const reply = await readSSEStream(res.body)
-          return { reply, actions: [] }
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : 'Stream failed'
-          setError(errorMsg)
-          return { reply: '', actions: [] }
+      try {
+        const body = {
+          message,
+          mode,
+          ...confirmationData,
         }
+
+        const res = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+
+        if (!res.ok) {
+          const errorMsg = 'Chat request failed'
+          setError(errorMsg)
+          return { reply: 'AI endpoint not yet connected', actions: [] }
+        }
+
+        const contentType = res.headers.get('Content-Type')
+
+        if (contentType?.includes('text/event-stream')) {
+          try {
+            const reply = await readSSEStream(res.body, {
+              onText: () => {
+                // Text is accumulated in the stream
+              },
+              onToolResult: (tool, result) => {
+                // Update staged contacts from tool result
+                if (tool === 'find_contacts' && Array.isArray(result)) {
+                  setStagedContacts(result as StagedContact[])
+                  setStagingQuery(message)
+                }
+              },
+              onConfirmationRequired: (confirmMessage, actionType, payload) => {
+                setPendingConfirmation({
+                  message: confirmMessage,
+                  actionType,
+                  payload,
+                  lastMessage: message,
+                })
+                setShowConfirmDialog(true)
+              },
+              onToolError: (tool, errorMsg) => {
+                setError(`${tool}: ${errorMsg}`)
+              },
+              onError: (errorMsg) => {
+                setError(errorMsg)
+              },
+            })
+            return { reply, actions: [] }
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : 'Stream failed'
+            setError(errorMsg)
+            return { reply: '', actions: [] }
+          }
+        }
+
+        const data: ChatResponse = await res.json()
+
+        if (data.stagedContacts && data.stagedContacts.length > 0) {
+          setStagedContacts(data.stagedContacts)
+          setStagingQuery(message)
+        }
+
+        return data
+      } catch {
+        const errorMsg = 'AI endpoint not yet connected'
+        setError(errorMsg)
+        return { reply: errorMsg, actions: [] }
+      } finally {
+        setIsLoading(false)
       }
-
-      const data: ChatResponse = await res.json()
-
-      if (data.stagedContacts && data.stagedContacts.length > 0) {
-        setStagedContacts(data.stagedContacts)
-        setStagingQuery(message)
-      }
-
-      return data
-    } catch {
-      const errorMsg = 'AI endpoint not yet connected'
-      setError(errorMsg)
-      return { reply: errorMsg, actions: [] }
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+    },
+    []
+  )
 
   const approveStaged = useCallback(async (campaignName: string, keptContactIds: string[]) => {
     try {
@@ -134,14 +233,39 @@ export function useChatApi() {
     setStagingQuery('')
   }, [])
 
+  const handleConfirm = useCallback(async () => {
+    if (!pendingConfirmation) return
+
+    setShowConfirmDialog(false)
+
+    // Re-send with confirmation
+    const mode = AiMode.GENERAL_MANAGER // Default mode for confirmations
+    await sendMessage(pendingConfirmation.lastMessage, mode, {
+      userConfirmed: true,
+      actionType: pendingConfirmation.actionType,
+      payload: pendingConfirmation.payload,
+    })
+
+    setPendingConfirmation(null)
+  }, [pendingConfirmation, sendMessage])
+
+  const handleCancel = useCallback(() => {
+    setShowConfirmDialog(false)
+    setPendingConfirmation(null)
+  }, [])
+
   return {
     stagedContacts,
     stagingQuery,
     isLoading,
     error,
+    pendingConfirmation,
+    showConfirmDialog,
     sendMessage,
     approveStaged,
     deleteStagedRow,
     clearStaging,
+    handleConfirm,
+    handleCancel,
   }
 }
