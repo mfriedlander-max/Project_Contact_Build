@@ -16,23 +16,25 @@
 | **C** | Task 5: Staging Panel UI | 🟢 Complete | `StagingPanel.tsx`, `StagingRow.tsx`, `StagingHeader.tsx`, tests | 73 tests passing, selection + partial approval ✅ |
 | **D** | Task 6: System Prompts | 🟢 Complete | `/lib/ai/stream-chat.ts` | All 3 mode prompts updated ✅ |
 
-### Phase 2: Sequential (1/2 Complete)
+### Phase 2: Sequential (✅ COMPLETE - All 2 tasks done)
 
 | Agent | Task | Depends On | Status |
 |-------|------|------------|--------|
 | **A** | Task 2: Chat API Tool Calling | Task 1 ✅ | 🟢 Complete - 9 tests, commit a0a4e7c |
-| **C** | Task 4: Frontend Hook | Task 2 ✅ | 🟡 Ready to Start - Prompt ready |
+| **C** | Task 4: Frontend Hook | Task 2 ✅ | 🟢 Complete - 25 tests, commit 581f847 |
 
-### Phase 3: Integration Testing (Waiting)
+### Phase 3: Integration Testing (🟡 Ready to Start)
 
 | Agent | Task | Depends On | Status |
 |-------|------|------------|--------|
-| **A** | Full E2E Integration | All tasks | ⏳ Waiting |
+| **A** | Full E2E Integration | All tasks ✅ | 🟡 Ready to Start |
 
 ### Completed This Sprint
 - [x] Agent A (Task 1): Tool Schema Generator - 18 tests, maps all 14 actions to Claude tools
 - [x] Agent A (Task 2): Chat API Tool Calling - 9 tests, 4 event types (tool_result, confirmation_required, tool_error, text)
 - [x] Agent B (Task 3): Duplicate Detection - Smart backfill with 3 matching strategies
+- [x] Agent C (Task 4): Frontend Hook - 25 tests, handles all 4 event types with confirmation flow
+- [x] Agent C (Task 5): Staging Panel UI - All components + tests complete
 - [x] Agent D (Task 6): System prompts updated for all 3 modes
 - [x] Agent C (Task 5): Staging Panel UI - All components + tests complete
 
@@ -56,7 +58,7 @@
 - `/status/task-001-tool-schemas.md` - Agent A ✅
 - `/status/task-002-chat-api.md` - Agent A ✅
 - `/status/task-003-duplicates.md` - Agent B ✅
-- `/status/task-004-frontend-hook-prompt.md` - Agent C prompt ready
+- `/status/task-004-frontend-hook.md` - Agent C ✅
 - `/status/task-005-staging-ui.md` - Agent C ✅
 - `/status/task-006-prompts.md` - Agent D ✅
 
