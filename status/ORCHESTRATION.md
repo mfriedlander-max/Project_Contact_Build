@@ -1,60 +1,81 @@
 # Orchestration Status
 
-## Current Status: Manual QA In Progress
-**State**: User is manually testing the app locally (localhost:3000) and on Vercel
-**Action**: User will explore, break things, and report issues. Next session will fix issues + complete remaining features.
+## Current Sprint: Claude Tool Calling Implementation
+**Goal**: Enable AI chat to execute actions via Claude tool calling (14 tools across 3 modes)
+**Started**: 2026-01-31
+**Branch**: `feature/claude-tool-calling`
+**Strategy**: File ownership, parallel Phase 1 execution
+**Plan**: [docs/plans/2026-01-31-tool-calling-orchestration.md](../docs/plans/2026-01-31-tool-calling-orchestration.md)
 
-### Known Issues Found During QA
-- Chat on `/home` doesn't work — `useChatApi` does `res.json()` on an SSE stream (needs streaming reader)
-- Google OAuth returns `invalid_client` on Vercel (works locally)
-- Secrets exposed in chat history — need rotation
+### Phase 1: Parallel Execution (✅ COMPLETE - All 4 tasks done)
 
-### What Works
-- Login page renders, Google OAuth works locally
-- `/sheets` — grid, search, sort, column selector, stage filters, saved views all render with Tailwind
-- `/settings` — tabs (Integrations, Templates, Automation), Hunter key input
-- Auth middleware redirects unauthenticated users to `/login`
-- 925/925 unit tests passing, build green
+| Agent | Task | Status | Files | Progress |
+|-------|------|--------|-------|----------|
+| **A** | Task 1: Tool Schema Generator | 🟢 Complete | `/lib/ai/tool-schemas.ts`, tests | 18 tests passing, ready for Task 2 ✅ |
+| **B** | Task 3: Duplicate Detection | 🟢 Complete | `stagingService.ts`, `findContacts.ts`, tests | All strategies implemented, 18 tests passing ✅ |
+| **C** | Task 5: Staging Panel UI | 🟢 Complete | `StagingPanel.tsx`, `StagingRow.tsx`, `StagingHeader.tsx`, tests | 73 tests passing, selection + partial approval ✅ |
+| **D** | Task 6: System Prompts | 🟢 Complete | `/lib/ai/stream-chat.ts` | All 3 mode prompts updated ✅ |
 
-### Next Session Plan
-1. Fix issues reported from manual QA
-2. Complete remaining features:
-   - AI Home chat (fix streaming client)
-   - "Didn't Connect" rule builder
-   - Template manager (full CRUD)
-   - Gmail OAuth connect flow
-   - App shell polish
-3. Fix Vercel Google OAuth
-4. Rotate secrets
+### Phase 2: Sequential (1/2 Complete)
+
+| Agent | Task | Depends On | Status |
+|-------|------|------------|--------|
+| **A** | Task 2: Chat API Tool Calling | Task 1 ✅ | 🟢 Complete - 9 tests, commit a0a4e7c |
+| **C** | Task 4: Frontend Hook | Task 2 ✅ | 🟡 Ready to Start - Prompt ready |
+
+### Phase 3: Integration Testing (Waiting)
+
+| Agent | Task | Depends On | Status |
+|-------|------|------------|--------|
+| **A** | Full E2E Integration | All tasks | ⏳ Waiting |
+
+### Completed This Sprint
+- [x] Agent A (Task 1): Tool Schema Generator - 18 tests, maps all 14 actions to Claude tools
+- [x] Agent A (Task 2): Chat API Tool Calling - 9 tests, 4 event types (tool_result, confirmation_required, tool_error, text)
+- [x] Agent B (Task 3): Duplicate Detection - Smart backfill with 3 matching strategies
+- [x] Agent D (Task 6): System prompts updated for all 3 modes
+- [x] Agent C (Task 5): Staging Panel UI - All components + tests complete
+
+### Key Features
+- **Tool Calling**: 14 action types mapped to Claude tool definitions
+- **Mode Restrictions**: CONTACT_FINDER (4 tools), GENERAL_MANAGER (3 tools), ASSISTANT (14 tools)
+- **Duplicate Detection**: Email, LinkedIn, Name+Company matching with smart backfill
+- **Staging UI**: Select all, individual checkboxes, "Create Campaign" button, minimal fields
+- **Confirmations**: Destructive actions (send_emails, delete_contacts, bulk_update) require user approval
+
+### File Ownership (No Conflicts)
+
+| Agent | Owns | Does NOT Touch |
+|-------|------|----------------|
+| **A** | `/lib/ai/tool-schemas.ts`, `/lib/ai/__tests__/`, `/app/api/ai/chat/` | Staging, UI components |
+| **B** | `/src/server/services/stagingService.ts`, `/src/server/actions/handlers/findContacts.ts` | UI, tool schemas |
+| **C** | `/src/ui/components/staging/*`, `/src/ui/hooks/useChatApi.ts` | Backend services |
+| **D** | `/lib/ai/stream-chat.ts` | Everything else (task complete) |
+
+### Status Docs
+- `/status/task-001-tool-schemas.md` - Agent A ✅
+- `/status/task-002-chat-api.md` - Agent A ✅
+- `/status/task-003-duplicates.md` - Agent B ✅
+- `/status/task-004-frontend-hook-prompt.md` - Agent C prompt ready
+- `/status/task-005-staging-ui.md` - Agent C ✅
+- `/status/task-006-prompts.md` - Agent D ✅
 
 ---
 
-## Previous Sprint
+## Previous Sprint: Feature Build (Settings, Sheets, Upload, Error Handling)
 **Goal**: Parallel feature build — Settings (gap fill), Sheets Grid, Upload Contacts, Error Handling UX
 **Started**: 2026-01-30
+**Status**: 🟢 Complete
 **Strategy**: File ownership (no worktrees), all on main branch
 
-## Active Agents
+### Completed Agents
 
-| Window | Feature | Status | Plan | Last Update |
-|--------|---------|--------|------|-------------|
+| Window | Feature | Status | Plan | Output |
+|--------|---------|--------|------|--------|
 | 1 | Settings Page (gap fill) | 🟢 Complete | `docs/plans/2026-01-30-settings-page.md` | 88 tests, 7 gaps filled (PATCH, optimistic updates, templates UI, automation, tabs) |
 | 2 | Sheets Grid | 🟢 Complete | `docs/plans/2026-01-30-sheets-grid.md` | 923 tests total, 10 tasks (grid, sort, filter, stage moves, saved views, column selector) |
 | 3 | Upload Contacts | 🟢 Complete | `docs/plans/2026-01-30-upload-contacts.md` | 53 tests, 6 tasks done (parser, API, ColumnMapper, UploadPreview, UploadDialog) |
 | 4 | Error Handling UX | 🟢 Complete | `docs/plans/2026-01-30-error-handling-ux.md` | 7 tasks done (Toast, ErrorBoundary, RetryButton, UndoToast refactor, layout wiring) |
-
-## File Ownership (Current Sprint)
-
-| Window | Owned Files |
-|--------|-------------|
-| 1 | `app/(app)/settings/*`, `app/api/settings/*`, `app/api/templates/*`, `app/api/integrations/*`, `src/ui/components/settings/*`, `src/ui/hooks/useSettings.ts`, `src/ui/hooks/useTemplates.ts`, `src/ui/hooks/useIntegrations.ts` |
-| 2 | `app/(app)/sheets/*`, `app/api/crm/contacts/*`, `app/api/saved-views/*`, `app/api/custom-fields/*`, `src/ui/components/contacts/*`, `src/ui/hooks/useContacts.ts`, `src/ui/hooks/useSavedViews.ts` |
-| 3 | `src/ui/components/upload/*`, `src/server/services/uploadParser.ts`, `app/api/contacts/upload/*` |
-| 4 | `src/ui/components/toast/*`, `src/ui/components/error/*`, `src/ui/hooks/useToast.ts`, `src/ui/components/UndoToast.tsx`, `app/(app)/layout.tsx` |
-
-## Notes
-- Window 1: Settings was partially built in UI rebuild. Agent filling specific gaps (PATCH route, optimistic updates, template editing, availability block, tabbed nav).
-- Window 2: Plan had wrong API paths. Agent self-corrected to `app/api/crm/contacts/`. Saved views CRUD already existed — skipped.
 
 ## Blockers
 - [ ] None currently
