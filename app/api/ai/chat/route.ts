@@ -8,12 +8,14 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { z } from 'zod'
-import { AiMode, type AiModeType } from '@/lib/types/enums'
+import { AiMode, AiActionType, type AiModeType, type AiActionTypeValue } from '@/lib/types/enums'
 import { executeAction, type ExecutorContext } from '@/src/server/actions/executor'
 import type { AiActionRequest, AiActionResult } from '@/src/server/actions/types'
 import { anthropicHelper } from '@/lib/anthropic'
 import { rateLimiters, getClientIdentifier } from '@/lib/rate-limit'
 import { buildSystemPrompt, buildChatMessages } from '@/lib/ai/stream-chat'
+import { getToolsForMode } from '@/lib/ai/tool-schemas'
+import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages'
 
 const chatRequestSchema = z.object({
   message: z.string().min(1).max(2000),
@@ -94,11 +96,15 @@ export async function POST(req: Request) {
     const systemPrompt = buildSystemPrompt(mode as AiModeType)
     const messages = buildChatMessages(message, history)
 
+    // Get tools for the current mode
+    const tools = getToolsForMode(mode as AiModeType)
+
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1024,
       system: systemPrompt,
       messages: messages.map(m => ({ role: m.role, content: m.content })),
+      tools,
     })
 
     const readableStream = new ReadableStream({
@@ -106,12 +112,73 @@ export async function POST(req: Request) {
         const encoder = new TextEncoder()
         try {
           for await (const event of stream) {
+            // Handle text deltas (regular conversation)
             if (
               event.type === 'content_block_delta' &&
               event.delta.type === 'text_delta'
             ) {
               const data = JSON.stringify({ type: 'text', text: event.delta.text })
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+            }
+
+            // Handle tool use blocks
+            if (event.type === 'content_block_start') {
+              const block = event.content_block
+
+              if (block.type === 'tool_use') {
+                const toolUseBlock = block as ToolUseBlock
+
+                // Convert tool name to action type
+                const actionType = toolNameToActionType(toolUseBlock.name)
+
+                // Validate that the action type exists
+                if (!Object.values(AiActionType).includes(actionType as any)) {
+                  const errorData = JSON.stringify({
+                    type: 'error',
+                    error: `Unknown tool: ${toolUseBlock.name}`,
+                  })
+                  controller.enqueue(encoder.encode(`data: ${errorData}\n\n`))
+                  continue
+                }
+
+                // Build action request (actionType is validated above)
+                const actionRequest: AiActionRequest = {
+                  type: actionType as AiActionTypeValue,
+                  payload: toolUseBlock.input as any,
+                  userConfirmed: false,
+                }
+
+                // Execute the action
+                const actionResult = await executeAction(actionRequest, context)
+
+                // Stream the action result
+                if (actionResult.requiresConfirmation) {
+                  // Stream confirmation request
+                  const confirmData = JSON.stringify({
+                    type: 'confirmation_required',
+                    message: actionResult.confirmationMessage,
+                    actionType,
+                    payload: toolUseBlock.input,
+                  })
+                  controller.enqueue(encoder.encode(`data: ${confirmData}\n\n`))
+                } else if (actionResult.success) {
+                  // Stream successful tool result
+                  const resultData = JSON.stringify({
+                    type: 'tool_result',
+                    tool: toolUseBlock.name,
+                    result: actionResult.data,
+                  })
+                  controller.enqueue(encoder.encode(`data: ${resultData}\n\n`))
+                } else {
+                  // Stream error
+                  const errorData = JSON.stringify({
+                    type: 'tool_error',
+                    tool: toolUseBlock.name,
+                    error: actionResult.error,
+                  })
+                  controller.enqueue(encoder.encode(`data: ${errorData}\n\n`))
+                }
+              }
             }
           }
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))
@@ -152,4 +219,12 @@ function formatActionReply(result: AiActionResult): string {
     return result.error ?? 'Action failed.'
   }
   return 'Action completed successfully.'
+}
+
+/**
+ * Convert snake_case tool name to SCREAMING_SNAKE_CASE action type
+ * e.g., "find_contacts" → "FIND_CONTACTS"
+ */
+function toolNameToActionType(toolName: string): string {
+  return toolName.toUpperCase()
 }
