@@ -2,6 +2,20 @@ import { prismadb } from '@/lib/prisma'
 import { escapeHtml } from '@/src/lib/sanitize'
 
 export const approveService = {
+  // New interface method - wraps approveList
+  async approve(input: {
+    userId: string
+    campaignName: string
+    keptContactIds: string[]
+  }) {
+    const result = await this.approveList(input.userId, input.campaignName, input.keptContactIds)
+    return {
+      id: result.campaign.id,
+      name: result.campaign.name,
+      contactCount: result.contactCount,
+    }
+  },
+
   async approveList(
     userId: string,
     campaignName: string,

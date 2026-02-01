@@ -79,6 +79,53 @@ export const stagingService = {
     return duplicateIndices
   },
 
+  /**
+   * Stage contacts from search results
+   * Converts SearchResult format to StagedContactInput and saves to database
+   */
+  async stageContacts(
+    userId: string,
+    contacts: Array<{ name: string; company: string; url: string; snippet: string }>
+  ) {
+    // Convert SearchResult to StagedContactInput
+    const stagingInput = contacts.map((contact) => {
+      // Parse name into firstName and lastName
+      const nameParts = contact.name.trim().split(/\s+/)
+      const lastName = nameParts.pop() || contact.name
+      const firstName = nameParts.join(' ') || undefined
+
+      // Check if URL is a LinkedIn URL
+      const linkedinUrl = contact.url.includes('linkedin.com') ? contact.url : undefined
+
+      return {
+        firstName,
+        lastName,
+        company: contact.company || undefined,
+        linkedinUrl,
+        sourceUrl: contact.url,
+        notes: contact.snippet || undefined,
+      }
+    })
+
+    // Generate session ID for this staging batch
+    const sessionId = `session-${Date.now()}`
+
+    // Save to database
+    await this.saveStagedList(userId, sessionId, stagingInput)
+
+    // Return the saved contacts with IDs
+    const savedContacts = await this.getStagedList(userId)
+
+    // Map back to expected format with IDs
+    return savedContacts.map((saved) => ({
+      id: saved.id,
+      name: `${saved.firstName || ''} ${saved.lastName}`.trim(),
+      company: saved.company || '',
+      url: saved.sourceUrl || '',
+      snippet: saved.notes || '',
+    }))
+  },
+
   async getStagedList(userId: string) {
     return prismadb.stagedContactList.findMany({
       where: { userId, isDeleted: false },

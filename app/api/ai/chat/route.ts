@@ -9,7 +9,17 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { z } from 'zod'
 import { AiMode, AiActionType, type AiModeType, type AiActionTypeValue } from '@/lib/types/enums'
-import { executeAction, type ExecutorContext } from '@/src/server/actions/executor'
+import { executeAction, type ExecutorContext, createExecutor } from '@/src/server/actions/executor'
+import { createActionLogger } from '@/src/server/actions/actionLogger'
+import { createCampaignRunner, CampaignRunState } from '@/src/server/actions/campaignRunner'
+import { stagingService } from '@/src/server/services/stagingService'
+import { approveService } from '@/src/server/services/approveService'
+import { searchProviderAdapter } from '@/src/server/integrations/searchProviderAdapter'
+import { contactService } from '@/src/server/services/contactService'
+import { savedViewService } from '@/src/server/services/savedViewService'
+import { stageExecutors } from '@/src/server/actions/handlers/stageExecutors'
+import { createPrismaCampaignRunStore } from '@/src/server/services/campaignRunStore'
+import { prismadb } from '@/lib/prisma'
 import type { AiActionRequest, AiActionResult } from '@/src/server/actions/types'
 import { anthropicHelper } from '@/lib/anthropic'
 import { rateLimiters, getClientIdentifier } from '@/lib/rate-limit'
@@ -29,6 +39,21 @@ const chatRequestSchema = z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string(),
   })).optional(),
+})
+
+// Initialize executor once at module level
+const logger = createActionLogger()
+const campaignRunStore = createPrismaCampaignRunStore(prismadb)
+const campaignRunner = createCampaignRunner({ store: campaignRunStore })
+const executor = createExecutor({
+  searchProvider: searchProviderAdapter,
+  stagingService,
+  approveService,
+  campaignRunner,
+  stageExecutors,
+  contactService,
+  savedViewService,
+  logger,
 })
 
 export async function POST(req: Request) {
@@ -99,6 +124,10 @@ export async function POST(req: Request) {
     // Get tools for the current mode
     const tools = getToolsForMode(mode as AiModeType)
 
+    // DEBUG: Log tools being sent
+    console.log('🔧 Tools for mode', mode, ':', tools.length, 'tools')
+    console.log('🔧 Tool names:', tools.map(t => t.name))
+
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1024,
@@ -110,6 +139,8 @@ export async function POST(req: Request) {
     const readableStream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder()
+        let currentToolUse: { name: string; inputJson: string } | null = null
+
         try {
           for await (const event of stream) {
             // Handle text deltas (regular conversation)
@@ -121,64 +152,99 @@ export async function POST(req: Request) {
               controller.enqueue(encoder.encode(`data: ${data}\n\n`))
             }
 
-            // Handle tool use blocks
+            // Start of a tool use block - capture the tool name
             if (event.type === 'content_block_start') {
               const block = event.content_block
-
               if (block.type === 'tool_use') {
                 const toolUseBlock = block as ToolUseBlock
+                currentToolUse = {
+                  name: toolUseBlock.name,
+                  inputJson: '',
+                }
+                console.log('🎯 Tool started:', toolUseBlock.name)
+              }
+            }
 
-                // Convert tool name to action type
-                const actionType = toolNameToActionType(toolUseBlock.name)
+            // Accumulate tool input JSON
+            if (
+              event.type === 'content_block_delta' &&
+              event.delta.type === 'input_json_delta' &&
+              currentToolUse
+            ) {
+              currentToolUse.inputJson += event.delta.partial_json
+            }
+
+            // End of tool use block - now we have complete input, execute it
+            if (event.type === 'content_block_stop' && currentToolUse) {
+              console.log('🔨 Tool complete:', currentToolUse.name)
+              console.log('📦 Full input JSON:', currentToolUse.inputJson)
+
+              try {
+                const toolInput = JSON.parse(currentToolUse.inputJson)
+                const actionType = toolNameToActionType(currentToolUse.name)
 
                 // Validate that the action type exists
                 if (!Object.values(AiActionType).includes(actionType as any)) {
                   const errorData = JSON.stringify({
                     type: 'error',
-                    error: `Unknown tool: ${toolUseBlock.name}`,
+                    error: `Unknown tool: ${currentToolUse.name}`,
                   })
                   controller.enqueue(encoder.encode(`data: ${errorData}\n\n`))
+                  currentToolUse = null
                   continue
                 }
 
-                // Build action request (actionType is validated above)
+                // Build and execute action request
                 const actionRequest: AiActionRequest = {
                   type: actionType as AiActionTypeValue,
-                  payload: toolUseBlock.input as any,
+                  payload: toolInput,
                   userConfirmed: false,
                 }
 
-                // Execute the action
-                const actionResult = await executeAction(actionRequest, context)
+                console.log('⚡ Executing action:', actionType, toolInput)
+                const actionResult = await executor.execute(actionRequest, context)
+                console.log('✅ Action result:', actionResult.success ? 'success' : 'failed')
+                if (!actionResult.success) {
+                  console.log('❌ Error:', actionResult.error)
+                }
+                if (actionResult.success && actionResult.data) {
+                  console.log('📊 Result data:', JSON.stringify(actionResult.data).substring(0, 200))
+                }
 
                 // Stream the action result
                 if (actionResult.requiresConfirmation) {
-                  // Stream confirmation request
                   const confirmData = JSON.stringify({
                     type: 'confirmation_required',
                     message: actionResult.confirmationMessage,
                     actionType,
-                    payload: toolUseBlock.input,
+                    payload: toolInput,
                   })
                   controller.enqueue(encoder.encode(`data: ${confirmData}\n\n`))
                 } else if (actionResult.success) {
-                  // Stream successful tool result
                   const resultData = JSON.stringify({
                     type: 'tool_result',
-                    tool: toolUseBlock.name,
+                    tool: currentToolUse.name,
                     result: actionResult.data,
                   })
                   controller.enqueue(encoder.encode(`data: ${resultData}\n\n`))
                 } else {
-                  // Stream error
                   const errorData = JSON.stringify({
                     type: 'tool_error',
-                    tool: toolUseBlock.name,
+                    tool: currentToolUse.name,
                     error: actionResult.error,
                   })
                   controller.enqueue(encoder.encode(`data: ${errorData}\n\n`))
                 }
+              } catch (parseError) {
+                console.error('❌ Failed to parse tool input:', parseError)
+                const errorData = JSON.stringify({
+                  type: 'error',
+                  error: `Failed to parse tool input: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`,
+                })
+                controller.enqueue(encoder.encode(`data: ${errorData}\n\n`))
               }
+
+              currentToolUse = null
             }
           }
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))

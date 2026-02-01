@@ -42,22 +42,20 @@ function HomeContentInner({ sendHandlerRef }: { sendHandlerRef: React.MutableRef
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1">
-          <ChatPanel />
-        </div>
-        {stagedContacts.length > 0 && (
-          <div className="w-96 border-l border-gray-200 p-4">
-            <StagingPanel
-              contacts={stagedContacts}
-              query={stagingQuery}
-              onApprove={handleApprove}
-              onClear={clearStaging}
-              onDeleteRow={deleteStagedRow}
-            />
-          </div>
-        )}
+      <div className="flex-1 overflow-hidden">
+        <ChatPanel />
       </div>
+      {stagedContacts.length > 0 && (
+        <div className="border-t border-gray-200 bg-gray-50 p-4">
+          <StagingPanel
+            contacts={stagedContacts}
+            query={stagingQuery}
+            onApprove={handleApprove}
+            onClear={clearStaging}
+            onDeleteRow={deleteStagedRow}
+          />
+        </div>
+      )}
     </div>
   )
 }
