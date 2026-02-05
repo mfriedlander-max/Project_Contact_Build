@@ -42,3 +42,6 @@ backup
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Test scripts
+scripts/
