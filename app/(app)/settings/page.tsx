@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { signIn } from 'next-auth/react'
+import { signIn, signOut } from 'next-auth/react'
 import { IntegrationsSection } from '@/src/ui/components/settings/IntegrationsSection'
 import { TemplatesSection } from '@/src/ui/components/settings/TemplatesSection'
 import { AutomationSection } from '@/src/ui/components/settings/AutomationSection'
@@ -39,11 +39,23 @@ export default function SettingsPage() {
     await updateTemplate(id, { isDefault: true })
   }
 
+  const handleLogout = () => {
+    signOut({ callbackUrl: '/login' })
+  }
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-gray-500">Manage your account and preferences</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Settings</h1>
+          <p className="text-gray-500">Manage your account and preferences</p>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+        >
+          Log out
+        </button>
       </div>
 
       <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
