@@ -107,9 +107,20 @@ async function readSSEStream(
   }
 }
 
+// Contact type for query results
+interface QueriedContact {
+  id: string
+  first_name?: string
+  last_name?: string
+  email?: string
+  company?: string
+  connection_stage?: string
+}
+
 export function useChatApi() {
   const [stagedContacts, setStagedContacts] = useState<StagedContact[]>([])
   const [stagingQuery, setStagingQuery] = useState('')
+  const [queriedContacts, setQueriedContacts] = useState<QueriedContact[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null)
@@ -151,15 +162,21 @@ export function useChatApi() {
 
         if (contentType?.includes('text/event-stream')) {
           try {
+            let queryResults: QueriedContact[] = []
             const reply = await readSSEStream(res.body, {
               onText: () => {
                 // Text is accumulated in the stream
               },
               onToolResult: (tool, result) => {
-                // Update staged contacts from tool result
+                // Update staged contacts from find_contacts tool result
                 if (tool === 'find_contacts' && Array.isArray(result)) {
                   setStagedContacts(result as StagedContact[])
                   setStagingQuery(message)
+                }
+                // Capture queried contacts from query_contacts tool result
+                if (tool === 'query_contacts' && Array.isArray(result)) {
+                  queryResults = result as QueriedContact[]
+                  setQueriedContacts(queryResults)
                 }
               },
               onConfirmationRequired: (confirmMessage, actionType, payload) => {
@@ -178,6 +195,16 @@ export function useChatApi() {
                 setError(errorMsg)
               },
             })
+            // If we got query results, append them to the reply
+            if (queryResults.length > 0) {
+              const formattedContacts = queryResults.map(c =>
+                `• ${c.first_name || ''} ${c.last_name || ''} - ${c.company || 'No company'} (${c.connection_stage || 'Unknown stage'})`
+              ).join('\n')
+              const enhancedReply = reply
+                ? `${reply}\n\n**Found ${queryResults.length} contact(s):**\n${formattedContacts}`
+                : `**Found ${queryResults.length} contact(s):**\n${formattedContacts}`
+              return { reply: enhancedReply, actions: [] }
+            }
             return { reply, actions: [] }
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : 'Stream failed'
@@ -254,9 +281,14 @@ export function useChatApi() {
     setPendingConfirmation(null)
   }, [])
 
+  const clearQueriedContacts = useCallback(() => {
+    setQueriedContacts([])
+  }, [])
+
   return {
     stagedContacts,
     stagingQuery,
+    queriedContacts,
     isLoading,
     error,
     pendingConfirmation,
@@ -265,6 +297,7 @@ export function useChatApi() {
     approveStaged,
     deleteStagedRow,
     clearStaging,
+    clearQueriedContacts,
     handleConfirm,
     handleCancel,
   }
