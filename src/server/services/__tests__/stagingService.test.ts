@@ -65,7 +65,14 @@ describe('stagingService', () => {
         where: { userId: USER_ID, isDeleted: false },
         orderBy: { createdAt: 'desc' },
       })
-      expect(result).toEqual([mockStagedContact])
+      // Result is transformed to StagedContact format
+      expect(result).toEqual([{
+        id: 'staged-1',
+        name: 'John Doe',
+        company: 'Acme',
+        url: 'https://example.com',
+        snippet: 'Great fit',
+      }])
     })
 
     it('returns empty array when no staged contacts', async () => {

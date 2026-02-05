@@ -113,24 +113,24 @@ export const stagingService = {
     // Save to database
     await this.saveStagedList(userId, sessionId, stagingInput)
 
-    // Return the saved contacts with IDs
-    const savedContacts = await this.getStagedList(userId)
-
-    // Map back to expected format with IDs
-    return savedContacts.map((saved) => ({
-      id: saved.id,
-      name: `${saved.firstName || ''} ${saved.lastName}`.trim(),
-      company: saved.company || '',
-      url: saved.sourceUrl || '',
-      snippet: saved.notes || '',
-    }))
+    // Return the saved contacts with IDs (already transformed by getStagedList)
+    return this.getStagedList(userId)
   },
 
   async getStagedList(userId: string) {
-    return prismadb.stagedContactList.findMany({
+    const records = await prismadb.stagedContactList.findMany({
       where: { userId, isDeleted: false },
       orderBy: { createdAt: 'desc' },
     })
+
+    // Transform to StagedContact format
+    return records.map((record) => ({
+      id: record.id,
+      name: `${record.firstName || ''} ${record.lastName}`.trim(),
+      company: record.company || '',
+      url: record.sourceUrl || '',
+      snippet: record.notes || '',
+    }))
   },
 
   async saveStagedList(
@@ -165,7 +165,7 @@ export const stagingService = {
     })
   },
 
-  async deleteStagedRow(userId: string, contactId: string) {
+  async deleteStagedRow(userId: string, contactId: string): Promise<void> {
     const existing = await prismadb.stagedContactList.findFirst({
       where: { id: contactId, userId },
     })
@@ -174,7 +174,7 @@ export const stagingService = {
       throw new Error('Staged contact not found')
     }
 
-    return prismadb.stagedContactList.update({
+    await prismadb.stagedContactList.update({
       where: { id: contactId },
       data: { isDeleted: true },
     })
